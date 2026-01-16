@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute } from '../types';
 import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Anchor } from 'lucide-react';
-import { supabase } from '../supabaseClient'; // Assicurati che l'import sia in alto
+import { supabase } from './supabaseClient'; // Assicurati che l'import sia in alto
 
 interface TestRunnerProps {
   test: SensoryTest;
