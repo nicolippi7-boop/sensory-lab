@@ -5,6 +5,7 @@ import { suggestAttributes, analyzeResults } from '../services/geminiService';
 import { Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, PlayCircle, Download, Shuffle, Pencil, Trash2, Save, QrCode, X, Copy, Check, Wifi, Share2, Settings2, Info, Layers, Activity, Target, Anchor } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import * as XLSX from 'xlsx';
+import { supabase } from './supabaseClient';
 
 interface AdminDashboardProps {
   tests: SensoryTest[];
@@ -84,8 +85,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSave = () => {
+const handleSave = async () => {
     if (!newTestName) return alert("Inserisci un nome.");
+    
     const testConfig: TestConfig = {
         instructions: getDefaultInstructions(newTestType),
         products,
@@ -94,15 +96,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
         randomizePresentation: randomize,
         correctOddSampleCode: (newTestType === TestType.TRIANGLE || newTestType === TestType.PAIRED_COMPARISON) ? correctAnswerCode : undefined
     };
-    if (editingId) {
-        onUpdateTest({ ...tests.find(t => t.id === editingId)!, name: newTestName, type: newTestType, config: testConfig });
-    } else {
-        onCreateTest({ id: generateId(), name: newTestName, type: newTestType, createdAt: new Date().toISOString(), status: 'active', config: testConfig });
-    }
-    resetForm();
-    setView('LIST');
-  };
 
+    try {
+        if (editingId) {
+            const { error } = await supabase
+                .from('tests')
+                .update({ 
+                    name: newTestName, 
+                    type: newTestType, 
+                    config: testConfig 
+                })
+                .eq('id', editingId);
+            
+            if (error) throw error;
+            alert("✅ Test aggiornato nel cloud!");
+        } else {
+            const { error } = await supabase
+                .from('tests')
+                .insert([{ 
+                    name: newTestName, 
+                    type: newTestType, 
+                    status: 'active', 
+                    config: testConfig 
+                }]);
+            
+            if (error) throw error;
+            alert("✅ Test creato sul database!");
+        }
+        
+        // --- MODIFICA QUI ---
+        resetForm();
+        setView('LIST');
+        
+        // Invece di reload(), chiamiamo la funzione passata dal padre (App.tsx)
+        // Questo attiverà fetchAllData() e aggiornerà la lista subito!
+        onCreateTest(); 
+        
+    } catch (error) {
+        console.error("Errore database:", error);
+        alert("Errore nel salvataggio su Supabase.");
+    }
+};
   const resetForm = () => {
       setEditingId(null); setNewTestName(''); setNewTestType(TestType.QDA); setRandomize(false);
       setProducts([{ id: '1', name: 'Campione A', code: '101' }, { id: '2', name: 'Campione B', code: '254' }]);
@@ -421,16 +455,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                     <div key={test.id} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm hover:shadow-xl transition-all relative group overflow-hidden">
                         <div className="flex justify-between items-start mb-6">
                             <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">{test.type}</span>
-                            <button onClick={() => onUpdateTest({...test, status: test.status === 'active' ? 'closed' : 'active'})} className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full transition-all ${test.status === 'active' ? 'bg-green-100 text-green-700 ring-2 ring-green-50' : 'bg-red-50 text-red-600'}`}>
-                                {test.status === 'active' ? <><Wifi size={14}/> APERTO</> : <><StopCircle size={14}/> CHIUSO</>}
-                            </button>
-                        </div>
+<button 
+  onClick={async () => {
+    const newStatus = test.status === 'active' ? 'closed' : 'active';
+    const { error } = await supabase
+      .from('tests')
+      .update({ status: newStatus })
+      .eq('id', test.id);
+    
+    if (error) {
+      alert("Errore nel cambio stato");
+    } else {
+      // Questo aggiorna l'interfaccia ricaricando i dati
+      window.location.reload(); 
+    }
+  }} 
+  className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-full transition-all ${test.status === 'active' ? 'bg-green-100 text-green-700 ring-2 ring-green-50' : 'bg-red-50 text-red-600'}`}
+>
+    {test.status === 'active' ? <><Wifi size={14}/> APERTO</> : <><StopCircle size={14}/> CHIUSO</>}
+</button>                        </div>
                         <h3 className="text-2xl font-black text-slate-900 mb-8 leading-tight tracking-tighter">{test.name}</h3>
                         <div className="flex items-center gap-2 border-t-2 border-slate-50 pt-6">
                             <button onClick={() => { setSelectedTest(test); setView('DETAIL'); }} className="flex-1 py-3 text-indigo-600 font-black hover:bg-indigo-50 rounded-2xl flex items-center justify-center gap-2 transition-all"> <BarChart2 size={20}/> ANALISI</button>
                             <button onClick={() => handleExportExcel(test)} title="Esporta Excel" className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Download size={22}/></button>
                             <button onClick={() => handleEditClick(test)} title="Modifica" className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all"><Pencil size={20}/></button>
-                            <SlideToDelete onDelete={() => onDeleteTest(test.id)} />
+                            <SlideToDelete onDelete={async () => {
+    if (confirm("Sei sicuro di voler eliminare questo test?")) {
+      const { error } = await supabase
+        .from('tests')
+        .delete()
+        .eq('id', test.id);
+      
+      if (error) {
+        alert("Errore durante l'eliminazione");
+      } else {
+        window.location.reload();
+      }
+    }
+}} />
                         </div>
                     </div>
                 ))}

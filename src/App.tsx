@@ -6,29 +6,55 @@ import { TestRunner } from './components/TestRunner';
 import { ChefHat, ShieldCheck, Wifi, WifiOff, ExternalLink, Activity } from 'lucide-react';
 // @ts-ignore
 import { Peer } from 'peerjs';
+import { supabase } from './lib/supabase'; // Assicurati che il percorso sia corretto
 
 const App: React.FC = () => {
+  // 1. Gestione della Vista (rimane simile)
   const [view, setView] = useState<ViewState>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME';
   });
 
-  const [tests, setTests] = useState<SensoryTest[]>(() => {
-    const saved = localStorage.getItem('sl_tests');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [results, setResults] = useState<JudgeResult[]>(() => {
-    const saved = localStorage.getItem('sl_results');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  // 2. Stati inizializzati vuoti (i dati arriveranno dal database)
+  const [tests, setTests] = useState<SensoryTest[]>([]);
+  const [results, setResults] = useState<JudgeResult[]>([]);
   const [judgeName, setJudgeName] = useState('');
   const [activeTestId, setActiveTestId] = useState('');
   const [peerId, setPeerId] = useState('');
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connected'>('disconnected');
+  
   const peerRef = useRef<any>(null);
   const connections = useRef<any[]>([]);
+
+  // 3. FUNZIONE PER SCARICARE I DATI DA SUPABASE
+  const fetchAllData = async () => {
+    try {
+      // Scarica i Test
+      const { data: testsData, error: testsError } = await supabase
+        .from('tests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (testsError) throw testsError;
+      if (testsData) setTests(testsData);
+
+      // Scarica i Risultati
+      const { data: resultsData, error: resultsError } = await supabase
+        .from('results')
+        .select('*');
+      
+      if (resultsError) throw resultsError;
+      if (resultsData) setResults(resultsData);
+      
+    } catch (err) {
+      console.error("Errore durante il caricamento dei dati:", err);
+    }
+  };
+
+  // 4. Carica i dati all'avvio dell'app
+  useEffect(() => {
+    fetchAllData();
+  }, []);
 
   useEffect(() => { localStorage.setItem('sl_tests', JSON.stringify(tests)); }, [tests]);
   useEffect(() => { localStorage.setItem('sl_results', JSON.stringify(results)); }, [results]);
@@ -73,13 +99,34 @@ const App: React.FC = () => {
     });
   }, [tests]);
 
-  const handleComplete = (res: JudgeResult) => {
-    setResults(prev => [...prev, res]);
-    connections.current.forEach(c => c.open && c.send({ type: 'SUBMIT_RESULT', payload: res }));
-    setView('HOME');
-    setJudgeName('');
-    setActiveTestId('');
-    alert("Test completato! I dati sono stati inviati al Panel Leader.");
+const handleComplete = async (res: JudgeResult) => {
+    try {
+      // 1. Salvataggio su Supabase
+      const { error } = await supabase
+        .from('results')
+        .insert([{
+          test_id: res.testId,
+          judge_name: res.judgeName,
+          responses: res.responses, // Qui vengono salvati tutti i voti in formato JSON
+          submitted_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
+
+      // 2. Aggiornamento locale e invio P2P (per sicurezza e velocità)
+      setResults(prev => [...prev, res]);
+      connections.current.forEach(c => c.open && c.send({ type: 'SUBMIT_RESULT', payload: res }));
+      
+      // 3. Reset dell'interfaccia
+      setView('HOME');
+      setJudgeName('');
+      setActiveTestId('');
+      
+      alert("✅ Test completato! I dati sono stati salvati correttamente nel cloud.");
+    } catch (err) {
+      console.error("Errore durante il salvataggio:", err);
+      alert("❌ Errore nel salvataggio dei dati. Controlla la connessione.");
+    }
   };
 
   return (
@@ -133,12 +180,15 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {view === 'ADMIN_DASHBOARD' && (
+{view === 'ADMIN_DASHBOARD' && (
         <AdminDashboard 
-          tests={tests} results={results} peerId={peerId}
-          onCreateTest={t => setTests([...tests, t])}
-          onDeleteTest={id => setTests(tests.filter(t => t.id !== id))}
-          onUpdateTest={t => setTests(tests.map(o => o.id === t.id ? t : o))}
+          tests={tests} 
+          results={results} 
+          peerId={peerId}
+          // Usiamo fetchAllData per sincronizzare lo stato con il database
+          onCreateTest={fetchAllData}
+          onDeleteTest={fetchAllData}
+          onUpdateTest={fetchAllData}
           onNavigate={() => setView('HOME')}
         />
       )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute } from '../types';
 import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Anchor } from 'lucide-react';
+import { supabase } from '../supabaseClient'; // Assicurati che l'import sia in alto
 
 interface TestRunnerProps {
   test: SensoryTest;
@@ -100,10 +101,38 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   };
 
-  const submitAll = () => {
-      onComplete({ ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString() });
-  };
+const submitAll = async () => {
+  try {
+    const { error } = await supabase
+      .from('results')
+      .insert([
+        {
+          test_id: test.id,
+          judge_name: judgeName,
+          // Mappatura completa per tutti i tuoi test
+          qda_ratings: result.qdaRatings || {},
+          cata_selection: result.cataSelection || [],
+          rata_selection: result.rataSelection || {},
+          napping_data: result.nappingData || {},
+          sorting_groups: result.sortingGroups || {},
+          tds_logs: result.tdsLogs || {},
+          ti_logs: result.tiLogs || {},
+          flash_profile_data: result.flashProfileData || {},
+          selection: result.selection || null,
+          submitted_at: new Date().toISOString()
+        }
+      ]);
 
+    if (error) throw error;
+
+    alert("✅ Test inviato con successo!");
+    onComplete(); // Torna alla Home
+
+  } catch (error) {
+    console.error("Errore invio dati:", error);
+    alert("❌ Errore nel salvataggio. Riprova o controlla la connessione.");
+  }
+};
   const handleQdaChange = (attrId: string, value: number, prodCode: string = currentProduct?.code || '') => {
     if (!prodCode) return;
     setResult(prev => ({
