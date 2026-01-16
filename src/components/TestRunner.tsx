@@ -100,43 +100,19 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   };
 
+  // --- FUNZIONE CORRETTA: ALLINEATA AD APP.TSX E AL DATABASE ---
   const submitAll = async () => {
-    try {
-      const finalResult: JudgeResult = {
+    const finalResult: JudgeResult = {
         ...result as JudgeResult,
         id: generateId(),
         submittedAt: new Date().toISOString(),
         selection: selectedOne || undefined
-      };
-
-      const { error } = await supabase
-        .from('results')
-        .insert([
-          {
-            test_id: test.id,
-            judge_name: judgeName,
-            qda_ratings: finalResult.qdaRatings || {},
-            cata_selection: finalResult.cataSelection || [],
-            rata_selection: finalResult.rataSelection || {},
-            napping_data: finalResult.nappingData || {},
-            sorting_groups: finalResult.sortingGroups || {},
-            tds_logs: finalResult.tdsLogs || {},
-            ti_logs: finalResult.tiLogs || {},
-            flash_profile_data: finalResult.flashProfileData || {},
-            selection: finalResult.selection || null,
-            submitted_at: finalResult.submittedAt
-          }
-        ]);
-
-      if (error) throw error;
-
-      alert("✅ Test inviato con successo!");
-      onComplete(finalResult); 
-
-    } catch (error) {
-      console.error("Errore invio dati:", error);
-      alert("❌ Errore nel salvataggio. Riprova o controlla la connessione.");
-    }
+    };
+    
+    // Non facciamo più la chiamata supabase.from('results').insert qui!
+    // Deleghiamo tutto alla funzione onComplete passata da App.tsx
+    // che è già configurata per gestire il database correttamente.
+    onComplete(finalResult);
   };
 
   const handleQdaChange = (attrId: string, value: number, prodCode: string = currentProduct?.code || '') => {
@@ -485,17 +461,17 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
              </button>
           ) : isTimerRunning ? (
             <div className="flex flex-col items-center gap-8">
-               <div className="relative w-full h-[400px] flex gap-4">
-                   <div className="flex-1 bg-slate-100 rounded-3xl border-2 border-slate-200 relative overflow-hidden shadow-inner flex flex-col-reverse touch-none">
-                       <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none"> <polyline points={polylinePoints} fill="none" stroke="currentColor" strokeWidth="1" /> </svg>
-                       <div className="w-full transition-all duration-75 ease-linear flex items-start justify-center relative" style={{ height: `${currentIntensity}%`, backgroundColor: getColor(currentIntensity) }}> <div className="w-full h-1 bg-white/50 absolute top-0"></div> </div>
-                       <input type="range" min="0" max="100" step="1" value={currentIntensity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentIntensity(Number(e.target.value))} className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10" style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any} />
-                       <div className="absolute right-4 top-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Max</div>
-                       <div className="absolute right-4 bottom-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Min</div>
-                   </div>
-                   <div className="w-24 flex flex-col justify-end items-center pb-4"> <span className="text-6xl font-black tabular-nums tracking-tighter" style={{color: getColor(currentIntensity)}}>{currentIntensity}</span> <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Intensità</span> </div>
-               </div>
-               <button onClick={() => { stopTimer(); handleNextProduct(); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase tracking-widest"> <Square size={24} fill="currentColor" /> STOP </button>
+                <div className="relative w-full h-[400px] flex gap-4">
+                    <div className="flex-1 bg-slate-100 rounded-3xl border-2 border-slate-200 relative overflow-hidden shadow-inner flex flex-col-reverse touch-none">
+                        <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none"> <polyline points={polylinePoints} fill="none" stroke="currentColor" strokeWidth="1" /> </svg>
+                        <div className="w-full transition-all duration-75 ease-linear flex items-start justify-center relative" style={{ height: `${currentIntensity}%`, backgroundColor: getColor(currentIntensity) }}> <div className="w-full h-1 bg-white/50 absolute top-0"></div> </div>
+                        <input type="range" min="0" max="100" step="1" value={currentIntensity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentIntensity(Number(e.target.value))} className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10" style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any} />
+                        <div className="absolute right-4 top-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Max</div>
+                        <div className="absolute right-4 bottom-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Min</div>
+                    </div>
+                    <div className="w-24 flex flex-col justify-end items-center pb-4"> <span className="text-6xl font-black tabular-nums tracking-tighter" style={{color: getColor(currentIntensity)}}>{currentIntensity}</span> <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Intensità</span> </div>
+                </div>
+                <button onClick={() => { stopTimer(); handleNextProduct(); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase tracking-widest"> <Square size={24} fill="currentColor" /> STOP </button>
             </div>
           ) : (
              <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm"> 
@@ -509,11 +485,11 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const renderNapping = () => (
       <div className="flex flex-col h-[85vh] w-full max-w-7xl mx-auto">
           <div className="mb-4 flex justify-between items-center px-2"> 
-             <div>
-                 <h3 className="font-bold text-2xl text-slate-900 flex items-center gap-2"><MapPin className="text-indigo-600"/> Mappa Proiettiva</h3>
-                 <p className="text-slate-500 text-sm">Trascina i prodotti (sinistra) sulla tovaglia (destra). Vicini = Simili.</p>
-             </div>
-             <button onClick={submitAll} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg transition-all text-sm">Termina Test</button> 
+              <div>
+                  <h3 className="font-bold text-2xl text-slate-900 flex items-center gap-2"><MapPin className="text-indigo-600"/> Mappa Proiettiva</h3>
+                  <p className="text-slate-500 text-sm">Trascina i prodotti sulla tovaglia. Vicini = Simili.</p>
+              </div>
+              <button onClick={submitAll} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg transition-all text-sm">Termina Test</button> 
           </div>
           <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 bg-white rounded-3xl p-4 shadow-sm border border-slate-200">
               <div className="w-full md:w-48 flex flex-col gap-2 overflow-y-auto pr-2 border-r border-slate-100">
@@ -528,15 +504,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                           </button>
                       );
                   })}
-                  <button onClick={() => { setPlacedProducts([]); setResult(prev => ({...prev, nappingData: {}})) }} className="mt-auto p-2 text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 justify-center border-t border-slate-100 pt-4"> <RefreshCcw size={12}/> Reset Mappa </button>
+                  <button onClick={() => { setPlacedProducts([]); setResult(prev => ({...prev, nappingData: {}})) }} className="mt-auto p-2 text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 justify-center border-t border-slate-100 pt-4"> <RefreshCcw size={12}/> Reset </button>
               </div>
-              <div className="flex-1 relative bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-300 cursor-crosshair overflow-hidden group touch-none shadow-inner" onClick={handleMapClick}>
+              <div className="flex-1 relative bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-300 cursor-crosshair overflow-hidden shadow-inner" onClick={handleMapClick}>
                   <div className="absolute top-1/2 left-0 w-full h-px bg-slate-300 z-0"></div> <div className="absolute left-1/2 top-0 h-full w-px bg-slate-300 z-0"></div>
                   {Object.entries(result.nappingData || {}).map(([code, coords]) => { 
                       const c = coords as { x: number, y: number }; 
-                      return ( <div key={code} className="absolute w-12 h-12 -ml-6 -mt-6 bg-indigo-600 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-4 border-white transition-all transform hover:scale-110 z-10 hover:z-20 hover:bg-indigo-700 cursor-pointer" style={{ left: `${c.x}%`, top: `${c.y}%` }} onClick={(e) => { e.stopPropagation(); setSelectedOne(code); }}> {code} </div> )
+                      return ( <div key={code} className="absolute w-12 h-12 -ml-6 -mt-6 bg-indigo-600 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-4 border-white transition-all transform hover:scale-110 z-10 hover:z-20 cursor-pointer" style={{ left: `${c.x}%`, top: `${c.y}%` }} onClick={(e) => { e.stopPropagation(); setSelectedOne(code); }}> {code} </div> )
                   })}
-                  {selectedOne ? ( <div className="absolute top-4 right-4 bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl pointer-events-none flex items-center gap-2 animate-bounce z-30"> <MousePointer2 size={14}/> Clicca per posizionare {selectedOne} </div> ) : ( <div className="absolute bottom-4 left-4 text-slate-400 font-bold text-xs pointer-events-none bg-white/80 px-3 py-1 rounded-full border border-slate-200"> Seleziona un codice a sinistra, poi clicca qui </div> )}
+                  {selectedOne ? ( <div className="absolute top-4 right-4 bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-bold animate-bounce z-30"> <MousePointer2 size={14}/> Posiziona {selectedOne} </div> ) : ( <div className="absolute bottom-4 left-4 text-slate-400 font-bold text-xs pointer-events-none bg-white/80 px-3 py-1 rounded-full border border-slate-200"> Clicca a sinistra poi qui </div> )}
               </div>
           </div>
       </div>
@@ -547,31 +523,28 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         <div className="max-w-4xl mx-auto w-full">
             <div className="text-center mb-10">
                 <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-4"> <Layers size={32} /> </div>
-                <h3 className="text-3xl font-black text-slate-900">Raggruppamento (Sorting)</h3>
-                <p className="text-slate-500 font-medium">Assegna lo stesso nome ai campioni che consideri simili.</p>
+                <h3 className="text-3xl font-black text-slate-900">Sorting</h3>
+                <p className="text-slate-500 font-medium">Assegna lo stesso nome ai campioni simili.</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {products.map(p => (
-                    <div key={p.code} className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6 group hover:shadow-xl transition-all">
+                    <div key={p.code} className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6 group transition-all">
                         <div className="flex items-center gap-4">
-                            <div className="w-20 h-20 bg-slate-900 text-white rounded-[24px] flex items-center justify-center text-4xl font-black font-mono tracking-tighter shadow-lg group-hover:scale-110 transition-transform"> {p.code} </div>
+                            <div className="w-20 h-20 bg-slate-900 text-white rounded-[24px] flex items-center justify-center text-4xl font-black font-mono shadow-lg group-hover:scale-110 transition-transform"> {p.code} </div>
                             <div className="flex-1">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Campione</span>
-                                <p className="font-bold text-slate-800">{p.name || 'Prodotto Anonimo'}</p>
+                                <p className="font-bold text-slate-800">{p.name || 'Prodotto'}</p>
                             </div>
                         </div>
                         <div className="relative">
-                            <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2 ml-1">Nome Gruppo</label>
-                            <input type="text" value={result.sortingGroups?.[p.code] || ''} onChange={(e) => handleSortChange(p.code, e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 focus:bg-white outline-none font-bold text-slate-800 transition-all shadow-inner" placeholder="Es: Dolce, Agrumato..." />
+                            <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2 ml-1">Gruppo</label>
+                            <input type="text" value={result.sortingGroups?.[p.code] || ''} onChange={(e) => handleSortChange(p.code, e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 focus:bg-white outline-none font-bold text-slate-800 transition-all" placeholder="Es: Dolce..." />
                         </div>
                     </div>
                 ))}
             </div>
             <div className="mt-16 flex justify-center">
-                <button onClick={() => {
-                    const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString() };
-                    onComplete(final);
-                }} className="px-16 py-6 bg-slate-900 text-white rounded-[32px] font-black shadow-2xl active:scale-95 transition-all text-xl uppercase tracking-widest"> INVIA RAGGRUPPAMENTI </button>
+                <button onClick={submitAll} className="px-16 py-6 bg-slate-900 text-white rounded-[32px] font-black shadow-2xl active:scale-95 transition-all text-xl uppercase tracking-widest"> INVIA </button>
             </div>
         </div>
     );
@@ -586,20 +559,19 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             <div className="text-right"> <p className="text-xs text-fuchsia-400 font-bold uppercase mb-1">Progresso</p> <p className="text-lg font-bold text-fuchsia-900">{currentProductIndex + 1} / {products.length}</p> </div>
           </div>
           <div className="mb-8 flex gap-3">
-              <input value={newAttribute} onChange={e => setNewAttribute(e.target.value)} placeholder="Scrivi un nuovo attributo (es. Floreale)..." className="flex-1 p-4 border-2 border-slate-200 rounded-xl shadow-sm focus:border-fuchsia-500 outline-none font-medium transition-all" onKeyDown={e => { if(e.key === 'Enter' && newAttribute) { if (!customAttributes.includes(newAttribute)) { setCustomAttributes([...customAttributes, newAttribute]); } setNewAttribute(''); } }} />
-              <button onClick={() => { if(newAttribute && !customAttributes.includes(newAttribute)) { setCustomAttributes([...customAttributes, newAttribute]); setNewAttribute(''); } }} className="px-6 py-4 bg-slate-900 text-white rounded-xl hover:bg-black font-bold active:scale-95 transition-transform"> Aggiungi </button>
+              <input value={newAttribute} onChange={e => setNewAttribute(e.target.value)} placeholder="Scrivi un attributo..." className="flex-1 p-4 border-2 border-slate-200 rounded-xl shadow-sm focus:border-fuchsia-500 outline-none font-medium transition-all" onKeyDown={e => { if(e.key === 'Enter' && newAttribute) { if (!customAttributes.includes(newAttribute)) { setCustomAttributes([...customAttributes, newAttribute]); } setNewAttribute(''); } }} />
+              <button onClick={() => { if(newAttribute && !customAttributes.includes(newAttribute)) { setCustomAttributes([...customAttributes, newAttribute]); setNewAttribute(''); } }} className="px-6 py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-transform"> + </button>
           </div>
           <div className="space-y-6 mb-12">
               {customAttributes.map(attr => (
                   <div key={attr} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in slide-in-from-bottom-2">
                       <div className="flex justify-between mb-4 items-center"> <span className="text-lg font-bold text-slate-800">{attr}</span> <span className="font-mono text-fuchsia-600 font-black text-xl">{result.qdaRatings?.[`${currentProduct.code}_${attr}`] || 0}</span> </div>
-                      <input type="range" min="0" max="10" step="0.5" value={result.qdaRatings?.[`${currentProduct.code}_${attr}`] || 0} onChange={(e) => handleQdaChange(attr, parseFloat(e.target.value))} className="w-full h-3 bg-slate-100 rounded-full appearance-none cursor-pointer accent-fuchsia-600" />
+                      <input type="range" min="0" max="10" step="0.5" value={result.qdaRatings?.[`${currentProduct.code}_${attr}`] || 0} onChange={(e) => handleQdaChange(attr, parseFloat(e.target.value))} className="w-full h-3 bg-slate-100 rounded-full appearance-none accent-fuchsia-600" />
                   </div>
               ))}
-              {customAttributes.length === 0 && ( <div className="text-center py-12 text-slate-400 font-medium italic bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200"> Non hai ancora aggiunto descrittori. Scrivine uno sopra per iniziare. </div> )}
           </div>
           <div className="flex justify-center">
-            <button onClick={handleNextProduct} className="px-12 py-5 bg-fuchsia-600 text-white rounded-2xl hover:bg-fuchsia-700 font-black shadow-xl shadow-fuchsia-100 transition-all flex items-center gap-3 text-xl active:scale-95 uppercase tracking-widest"> {currentProductIndex < products.length - 1 ? 'Prossimo' : 'Concludi'} <ArrowRight size={24} /> </button>
+            <button onClick={handleNextProduct} className="px-12 py-5 bg-fuchsia-600 text-white rounded-2xl hover:bg-fuchsia-700 font-black shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95 uppercase tracking-widest"> {currentProductIndex < products.length - 1 ? 'Prossimo' : 'Concludi'} <ArrowRight size={24} /> </button>
           </div>
       </div>
   )};
@@ -617,7 +589,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         </div>
       </header>
       <main className="flex-1 p-6 md:p-12">
-        <div className="max-w-3xl mx-auto mb-12 text-center animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="max-w-3xl mx-auto mb-12 text-center">
             <p className="text-lg text-slate-600 leading-relaxed font-medium italic">"{test.config.instructions}"</p>
         </div>
         {test.type === TestType.TRIANGLE && renderTriangle()}
