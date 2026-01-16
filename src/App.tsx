@@ -156,22 +156,23 @@ const handleComplete = async (res: JudgeResult) => {
     };
 
     try {
-      // Salvataggio Cloud con colonna 'responses' universale
+      // Usiamo String() per assicurarci che l'ID sia trattato come testo dal DB
       const { error } = await supabase.from('results').insert([{
-        test_id: res.testId,
-        judge_name: res.judgeName,
-        submitted_at: res.submittedAt || new Date().toISOString(),
-        responses: res // Salviamo l'intero oggetto dei risultati qui
+        test_id: String(res.testId), 
+        judge_name: String(res.judgeName),
+        submitted_at: new Date().toISOString(),
+        responses: res 
       }]);
       
       if (error) throw error;
 
       connections.current.forEach(c => c.open && c.send({ type: 'SUBMIT_RESULT', payload: res }));
       finishTestUI("✅ Test salvato correttamente nel Cloud!");
+
     } catch (err: any) {
       const errMsg = formatError(err);
       console.error("Errore invio Cloud:", errMsg);
-      finishTestUI(`⚠️ Errore salvataggio Cloud (${errMsg}). I dati sono solo locali.`);
+      finishTestUI(`⚠️ Errore: ${err.message || 'Verifica la tabella results'}`);
     }
   };
   return (
