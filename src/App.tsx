@@ -144,53 +144,36 @@ const App: React.FC = () => {
     }
   };
 
-  const handleComplete = async (res: JudgeResult) => {
-    // 1. Aggiornamento Locale immediato
+const handleComplete = async (res: JudgeResult) => {
     setResults(prev => [...prev, res]);
-    
-    const params = new URLSearchParams(window.location.search);
-    const isJudgeMode = params.get('mode') === 'judge';
+    const isJudgeMode = new URLSearchParams(window.location.search).get('mode') === 'judge';
 
-    // 2. Funzione per pulire lo stato e tornare alla vista corretta (Login per i giudici, Home per gli altri)
     const finishTestUI = (message: string) => {
       setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
       setJudgeName('');
       setActiveTestId('');
-      // Timeout per permettere al React render di avvenire prima del blocco dell'alert
       setTimeout(() => alert(message), 100);
     };
 
     try {
-      // 3. Tentativo di salvataggio su Supabase
+      // Salvataggio Cloud con colonna 'responses' universale
       const { error } = await supabase.from('results').insert([{
         test_id: res.testId,
         judge_name: res.judgeName,
-        submitted_at: res.submittedAt,
-        qda_ratings: res.qdaRatings || {},
-        cata_selection: res.cataSelection || [],
-        rata_selection: res.rataSelection || {},
-        napping_data: res.nappingData || {},
-        sorting_groups: res.sortingGroups || {},
-        tds_logs: res.tdsLogs || {},
-        ti_logs: res.tiLogs || {},
-        selection: res.triangleSelection || res.pairedSelection || res.selection || null
+        submitted_at: res.submittedAt || new Date().toISOString(),
+        responses: res // Salviamo l'intero oggetto dei risultati qui
       }]);
       
       if (error) throw error;
 
-      // 4. Invio P2P se connesso
       connections.current.forEach(c => c.open && c.send({ type: 'SUBMIT_RESULT', payload: res }));
-      
-      finishTestUI("✅ Test completato con successo!");
+      finishTestUI("✅ Test salvato correttamente nel Cloud!");
     } catch (err: any) {
       const errMsg = formatError(err);
       console.error("Errore invio Cloud:", errMsg);
-      
-      // ANCHE SE C'È UN ERRORE DI FETCH, chiudiamo il test e avvisiamo l'utente che il dato è solo locale.
-      finishTestUI(`⚠️ Test completato! Nota: il salvataggio Cloud è fallito (${errMsg}), i dati sono salvati solo localmente.`);
+      finishTestUI(`⚠️ Errore salvataggio Cloud (${errMsg}). I dati sono solo locali.`);
     }
   };
-
   return (
     <div className="font-inter min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden">
       {view === 'HOME' && (
