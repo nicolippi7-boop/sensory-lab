@@ -43,16 +43,16 @@ const App: React.FC = () => {
       const { data: testsData, error: tError } = await supabase.from('tests').select('*').order('created_at', { ascending: false });
       if (tError) {
         console.error("Errore fetch tests:", formatError(tError));
-        throw tError;
+      } else if (testsData) {
+        setTests(testsData);
       }
-      if (testsData) setTests(testsData);
 
       const { data: resultsData, error: rError } = await supabase.from('results').select('*');
       if (rError) {
         console.error("Errore fetch results:", formatError(rError));
-        throw rError;
+      } else if (resultsData) {
+        setResults(resultsData);
       }
-      if (resultsData) setResults(resultsData);
     } catch (err: any) {
       console.error("Dettaglio Errore fetch data:", formatError(err));
     }
@@ -148,11 +148,16 @@ const App: React.FC = () => {
     // 1. Aggiornamento Locale immediato
     setResults(prev => [...prev, res]);
     
-    // 2. Funzione per pulire lo stato e tornare alla Home
-    const finishTestUI = () => {
-      setView('HOME');
+    const params = new URLSearchParams(window.location.search);
+    const isJudgeMode = params.get('mode') === 'judge';
+
+    // 2. Funzione per pulire lo stato e tornare alla vista corretta (Login per i giudici, Home per gli altri)
+    const finishTestUI = (message: string) => {
+      setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
       setJudgeName('');
       setActiveTestId('');
+      // Timeout per permettere al React render di avvenire prima del blocco dell'alert
+      setTimeout(() => alert(message), 100);
     };
 
     try {
@@ -176,16 +181,13 @@ const App: React.FC = () => {
       // 4. Invio P2P se connesso
       connections.current.forEach(c => c.open && c.send({ type: 'SUBMIT_RESULT', payload: res }));
       
-      finishTestUI();
-      alert("✅ Test completato con successo e salvato nel cloud!");
+      finishTestUI("✅ Test completato con successo!");
     } catch (err: any) {
       const errMsg = formatError(err);
       console.error("Errore invio Cloud:", errMsg);
       
-      // ANCHE SE C'È UN ERRORE DI FETCH (Supabase non configurata o rete assente), 
-      // chiudiamo il test e avvisiamo l'utente che il dato è solo locale.
-      finishTestUI();
-      alert(`⚠️ Test completato, ma il salvataggio Cloud è fallito (${errMsg}). I dati sono stati salvati solo localmente.`);
+      // ANCHE SE C'È UN ERRORE DI FETCH, chiudiamo il test e avvisiamo l'utente che il dato è solo locale.
+      finishTestUI(`⚠️ Test completato! Nota: il salvataggio Cloud è fallito (${errMsg}), i dati sono salvati solo localmente.`);
     }
   };
 
@@ -220,12 +222,42 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {view === 'JUDGE_LOGIN' && (
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 bg-gradient-to-b from-indigo-50 to-white">
+          <div className="bg-white rounded-3xl p-10 shadow-2xl max-w-md w-full animate-in zoom-in duration-500">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="p-4 bg-indigo-100 rounded-2xl text-indigo-600">
+                <ChefHat size={32} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-slate-900">Assaggiatori</h2>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Cabina di Assaggio</p>
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Il tuo Nome</label>
+                <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Inserisci il tuo nome..." className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 outline-none font-bold text-slate-800 transition-all" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Test Disponibili</label>
+                <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 outline-none font-bold text-slate-800 transition-all bg-white cursor-pointer">
+                  <option value="">Scegli una sessione...</option>
+                  {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 active:scale-95 transition-all text-lg"> INIZIA ASSAGGIO </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {view === 'JUDGE_RUNNER' && (
         <TestRunner 
           test={tests.find(t => t.id === activeTestId)!}
           judgeName={judgeName}
           onComplete={handleComplete}
-          onExit={() => setView('HOME')}
+          onExit={() => setView(isJudgeMode() ? 'JUDGE_LOGIN' : 'HOME')}
         />
       )}
 
@@ -242,6 +274,10 @@ const App: React.FC = () => {
       )}
     </div>
   );
+
+  function isJudgeMode() {
+    return new URLSearchParams(window.location.search).get('mode') === 'judge';
+  }
 };
 
 export default App;
