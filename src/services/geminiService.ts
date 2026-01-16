@@ -1,50 +1,57 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// 1. IMPORTANTE: Usa import.meta.env per Vite
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(API_KEY);
+import { GoogleGenAI, Type } from "@google/genai";
+
+const getAiClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.warn("Gemini API Key missing! Insights will not be generated.");
+    return null;
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const suggestAttributes = async (productDescription: string): Promise<string[]> => {
+  const ai = getAiClient();
+  if (!ai) return [];
+  
   try {
-    // 2. Usa un modello stabile come gemini-1.5-flash
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: { responseMimeType: "application/json" }
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Act as a sensory scientist. Generate a list of 10 sensory attributes (Appearance, Aroma, Taste, Texture) suitable for a QDA or CATA analysis of the following product: "${productDescription}". Return ONLY the list of attributes as a JSON array of strings.`,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
+      }
     });
 
-    const prompt = `Act as a sensory scientist. Generate a list of 10 sensory attributes (Appearance, Aroma, Taste, Texture) suitable for a QDA or CATA analysis of the following product: "${productDescription}". Return ONLY the list of attributes as a JSON array of strings.`;
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-
-    if (text) {
-      return JSON.parse(text);
-    }
-    return [];
+    return JSON.parse(response.text || '[]');
   } catch (error) {
-    console.error("Error generating attributes:", error);
+    console.error("Gemini Suggestion Error:", error);
     return [];
   }
 };
 
 export const analyzeResults = async (testName: string, testType: string, summaryData: string): Promise<string> => {
+  const ai = getAiClient();
+  if (!ai) return "Configurazione AI mancante. Controlla la API Key su Vercel.";
+
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: `Agisci come un esperto Panel Leader di analisi sensoriale. Analizza i seguenti dati aggregati per il test "${testName}" (Tipo: ${testType}). 
+      
+      Sintesi Dati:
+      ${summaryData}
 
-    const prompt = `Act as a senior sensory panel leader. Analyze the following aggregated data for the test "${testName}" (Type: ${testType}). 
-    
-    Data Summary:
-    ${summaryData}
+      Fornisci un'interpretazione concisa e professionale dei risultati in lingua italiana.`,
+    });
 
-    Provide a concise interpretation of the results in Italian. Highlight significant differences or dominant attributes.`;
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-
-    return response.text() || "Impossibile generare l'analisi.";
+    return response.text || "Impossibile generare l'analisi.";
   } catch (error) {
-    console.error("Error analyzing results:", error);
+    console.error("Gemini Analysis Error:", error);
     return "Errore durante l'analisi AI.";
   }
 };

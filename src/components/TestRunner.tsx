@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute } from '../types';
-import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Anchor } from 'lucide-react';
-import { supabase } from './supabaseClient'; // Assicurati che l'import sia in alto
+import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 interface TestRunnerProps {
   test: SensoryTest;
@@ -50,7 +50,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [customAttributes, setCustomAttributes] = useState<string[]>([]);
   const [newAttribute, setNewAttribute] = useState('');
 
-  // Inizializza i prodotti solo al cambio del test o al montaggio
   useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
         if (test.config.randomizePresentation) {
@@ -101,38 +100,45 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   };
 
-const submitAll = async () => {
-  try {
-    const { error } = await supabase
-      .from('results')
-      .insert([
-        {
-          test_id: test.id,
-          judge_name: judgeName,
-          // Mappatura completa per tutti i tuoi test
-          qda_ratings: result.qdaRatings || {},
-          cata_selection: result.cataSelection || [],
-          rata_selection: result.rataSelection || {},
-          napping_data: result.nappingData || {},
-          sorting_groups: result.sortingGroups || {},
-          tds_logs: result.tdsLogs || {},
-          ti_logs: result.tiLogs || {},
-          flash_profile_data: result.flashProfileData || {},
-          selection: result.selection || null,
-          submitted_at: new Date().toISOString()
-        }
-      ]);
+  const submitAll = async () => {
+    try {
+      const finalResult: JudgeResult = {
+        ...result as JudgeResult,
+        id: generateId(),
+        submittedAt: new Date().toISOString(),
+        selection: selectedOne || undefined
+      };
 
-    if (error) throw error;
+      const { error } = await supabase
+        .from('results')
+        .insert([
+          {
+            test_id: test.id,
+            judge_name: judgeName,
+            qda_ratings: finalResult.qdaRatings || {},
+            cata_selection: finalResult.cataSelection || [],
+            rata_selection: finalResult.rataSelection || {},
+            napping_data: finalResult.nappingData || {},
+            sorting_groups: finalResult.sortingGroups || {},
+            tds_logs: finalResult.tdsLogs || {},
+            ti_logs: finalResult.tiLogs || {},
+            flash_profile_data: finalResult.flashProfileData || {},
+            selection: finalResult.selection || null,
+            submitted_at: finalResult.submittedAt
+          }
+        ]);
 
-    alert("✅ Test inviato con successo!");
-    onComplete(); // Torna alla Home
+      if (error) throw error;
 
-  } catch (error) {
-    console.error("Errore invio dati:", error);
-    alert("❌ Errore nel salvataggio. Riprova o controlla la connessione.");
-  }
-};
+      alert("✅ Test inviato con successo!");
+      onComplete(finalResult); 
+
+    } catch (error) {
+      console.error("Errore invio dati:", error);
+      alert("❌ Errore nel salvataggio. Riprova o controlla la connessione.");
+    }
+  };
+
   const handleQdaChange = (attrId: string, value: number, prodCode: string = currentProduct?.code || '') => {
     if (!prodCode) return;
     setResult(prev => ({
@@ -203,7 +209,10 @@ const submitAll = async () => {
           <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`w-40 h-40 rounded-full border-4 flex items-center justify-center text-3xl font-black font-mono transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-600 text-white scale-110 shadow-xl' : 'border-slate-200 hover:border-indigo-300 bg-white text-slate-700'}`}> {p.code} </button>
         ))}
       </div>
-      <button disabled={!selectedOne} onClick={() => onComplete({ ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), triangleSelection: selectedOne || '' })} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
+      <button disabled={!selectedOne} onClick={() => {
+          const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), triangleSelection: selectedOne || '' };
+          onComplete(final);
+      }} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
     </div>
   );
 
@@ -218,7 +227,10 @@ const submitAll = async () => {
           <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`w-48 h-48 rounded-3xl border-4 flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-4 ring-indigo-200 scale-105' : 'border-slate-200 hover:border-indigo-300 bg-white'}`}> <span className="text-xs text-slate-400 uppercase tracking-widest font-bold">Campione</span> <span className="text-4xl font-black font-mono">{p.code}</span> </button>
         ))}
       </div>
-      <button disabled={!selectedOne} onClick={() => onComplete({ ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), pairedSelection: selectedOne || '' })} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
+      <button disabled={!selectedOne} onClick={() => {
+          const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), pairedSelection: selectedOne || '' };
+          onComplete(final);
+      }} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
     </div>
   );
 
@@ -556,7 +568,10 @@ const submitAll = async () => {
                 ))}
             </div>
             <div className="mt-16 flex justify-center">
-                <button onClick={() => onComplete({ ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString() })} className="px-16 py-6 bg-slate-900 text-white rounded-[32px] font-black shadow-2xl active:scale-95 transition-all text-xl uppercase tracking-widest"> INVIA RAGGRUPPAMENTI </button>
+                <button onClick={() => {
+                    const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString() };
+                    onComplete(final);
+                }} className="px-16 py-6 bg-slate-900 text-white rounded-[32px] font-black shadow-2xl active:scale-95 transition-all text-xl uppercase tracking-widest"> INVIA RAGGRUPPAMENTI </button>
             </div>
         </div>
     );
