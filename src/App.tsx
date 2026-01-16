@@ -1,21 +1,19 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { TestType } from './types';
 import type { SensoryTest, JudgeResult, ViewState, P2PMessage } from './types';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TestRunner } from './components/TestRunner';
-import { ChefHat, ShieldCheck, Wifi, WifiOff, ExternalLink, Activity } from 'lucide-react';
+import { ChefHat, ShieldCheck, Wifi, ExternalLink } from 'lucide-react';
 // @ts-ignore
 import { Peer } from 'peerjs';
 import { supabase } from './components/supabaseClient';
 
 const App: React.FC = () => {
-  // 1. Gestione della Vista (rimane simile)
   const [view, setView] = useState<ViewState>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME';
   });
 
-  // 2. Stati inizializzati vuoti (i dati arriveranno dal database)
   const [tests, setTests] = useState<SensoryTest[]>([]);
   const [results, setResults] = useState<JudgeResult[]>([]);
   const [judgeName, setJudgeName] = useState('');
@@ -26,39 +24,24 @@ const App: React.FC = () => {
   const peerRef = useRef<any>(null);
   const connections = useRef<any[]>([]);
 
-  // 3. FUNZIONE PER SCARICARE I DATI DA SUPABASE
+  // Carica i dati da Supabase
   const fetchAllData = async () => {
     try {
-      // Scarica i Test
-      const { data: testsData, error: testsError } = await supabase
-        .from('tests')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (testsError) throw testsError;
+      const { data: testsData } = await supabase.from('tests').select('*').order('created_at', { ascending: false });
       if (testsData) setTests(testsData);
 
-      // Scarica i Risultati
-      const { data: resultsData, error: resultsError } = await supabase
-        .from('results')
-        .select('*');
-      
-      if (resultsError) throw resultsError;
+      const { data: resultsData } = await supabase.from('results').select('*');
       if (resultsData) setResults(resultsData);
-      
     } catch (err) {
-      console.error("Errore durante il caricamento dei dati:", err);
+      console.error("Errore fetch data:", err);
     }
   };
 
-  // 4. Carica i dati all'avvio dell'app
   useEffect(() => {
     fetchAllData();
   }, []);
 
-  useEffect(() => { localStorage.setItem('sl_tests', JSON.stringify(tests)); }, [tests]);
-  useEffect(() => { localStorage.setItem('sl_results', JSON.stringify(results)); }, [results]);
-
+  // PeerJS Setup
   useEffect(() => {
     const peer = new Peer();
     peerRef.current = peer;
@@ -66,11 +49,11 @@ const App: React.FC = () => {
     
     peer.on('connection', (conn: any) => {
       connections.current.push(conn);
-      conn.on('data', (data: P2PMessage) => {
-        if (data.type === 'SUBMIT_RESULT') setResults(prev => [...prev, data.payload]);
-        if (data.type === 'SYNC_TESTS') setTests(data.payload);
+      conn.on('data', (data: any) => {
+        const msg = data as P2PMessage;
+        if (msg.type === 'SUBMIT_RESULT') setResults(prev => [...prev, msg.payload]);
+        if (msg.type === 'SYNC_TESTS') setTests(msg.payload);
       });
-      // Sincronizza immediatamente quando un giudice si connette
       conn.on('open', () => conn.send({ type: 'SYNC_TESTS', payload: tests }));
     });
 
@@ -83,8 +66,9 @@ const App: React.FC = () => {
           connections.current.push(conn);
           setConnectionStatus('connected');
         });
-        conn.on('data', (data: P2PMessage) => {
-          if (data.type === 'SYNC_TESTS') setTests(data.payload);
+        conn.on('data', (data: any) => {
+          const msg = data as P2PMessage;
+          if (msg.type === 'SYNC_TESTS') setTests(msg.payload);
         });
       });
     }
@@ -92,40 +76,61 @@ const App: React.FC = () => {
     return () => peer.destroy();
   }, [tests.length]);
 
-  // Sincronizza lo stato dei test (anche quando vengono stoppati) con tutti i giudici connessi
-  useEffect(() => {
-    connections.current.forEach(conn => {
-      if (conn.open) conn.send({ type: 'SYNC_TESTS', payload: tests });
-    });
-  }, [tests]);
+  // CRUD Real-time per Admin
+  const handleCreateTest = async (test: SensoryTest) => {
+    const { error } = await supabase.from('tests').insert([{
+      id: test.id,
+      name: test.name,
+      type: test.type,
+      status: test.status,
+      config: test.config
+    }]);
+    if (!error) fetchAllData();
+  };
 
-const handleComplete = async (res: JudgeResult) => {
+  const handleUpdateTest = async (test: SensoryTest) => {
+    const { error } = await supabase.from('tests').update({
+      name: test.name,
+      status: test.status,
+      config: test.config
+    }).eq('id', test.id);
+    if (!error) fetchAllData();
+  };
+
+  const handleDeleteTest = async (testId: string) => {
+    const { error } = await supabase.from('tests').delete().eq('id', testId);
+    if (!error) fetchAllData();
+  };
+
+  const handleComplete = async (res: JudgeResult) => {
     try {
-      // 1. Salvataggio su Supabase
-      const { error } = await supabase
-        .from('results')
-        .insert([{
-          test_id: res.testId,
-          judge_name: res.judgeName,
-          responses: res.responses, // Qui vengono salvati tutti i voti in formato JSON
-          submitted_at: new Date().toISOString()
-        }]);
+      // Salvataggio mappato sulle colonne del DB
+      const { error } = await supabase.from('results').insert([{
+        test_id: res.testId,
+        judge_name: res.judgeName,
+        submitted_at: res.submittedAt,
+        qda_ratings: res.qdaRatings || {},
+        cata_selection: res.cataSelection || [],
+        rata_selection: res.rataSelection || {},
+        napping_data: res.nappingData || {},
+        sorting_groups: res.sortingGroups || {},
+        tds_logs: res.tdsLogs || {},
+        ti_logs: res.tiLogs || {},
+        selection: res.triangleSelection || res.pairedSelection || null
+      }]);
 
       if (error) throw error;
 
-      // 2. Aggiornamento locale e invio P2P (per sicurezza e velocità)
       setResults(prev => [...prev, res]);
       connections.current.forEach(c => c.open && c.send({ type: 'SUBMIT_RESULT', payload: res }));
       
-      // 3. Reset dell'interfaccia
       setView('HOME');
       setJudgeName('');
       setActiveTestId('');
-      
-      alert("✅ Test completato! I dati sono stati salvati correttamente nel cloud.");
+      alert("✅ Test completato e salvato su Supabase!");
     } catch (err) {
-      console.error("Errore durante il salvataggio:", err);
-      alert("❌ Errore nel salvataggio dei dati. Controlla la connessione.");
+      console.error("Salvataggio fallito:", err);
+      alert("❌ Errore nel salvataggio dei dati.");
     }
   };
 
@@ -154,7 +159,7 @@ const handleComplete = async (res: JudgeResult) => {
               <ShieldCheck size={40} />
             </div>
             <h2 className="text-4xl font-black mb-4 tracking-tighter">Panel Leader</h2>
-            <p className="text-slate-300 mb-10 leading-relaxed font-medium">Gestione professionale, analisi AI e monitoraggio real-time del panel.</p>
+            <p className="text-slate-300 mb-10 leading-relaxed font-medium">Gestione cloud e analisi AI centralizzata.</p>
             <button onClick={() => setView('ADMIN_DASHBOARD')} className="w-full py-6 bg-white text-slate-900 font-black rounded-3xl hover:bg-slate-50 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 text-xl">DASHBOARD <ExternalLink size={24}/></button>
           </div>
         </div>
@@ -180,15 +185,12 @@ const handleComplete = async (res: JudgeResult) => {
         </div>
       )}
 
-{view === 'ADMIN_DASHBOARD' && (
+      {view === 'ADMIN_DASHBOARD' && (
         <AdminDashboard 
-          tests={tests} 
-          results={results} 
-          peerId={peerId}
-          // Usiamo fetchAllData per sincronizzare lo stato con il database
-          onCreateTest={fetchAllData}
-          onDeleteTest={fetchAllData}
-          onUpdateTest={fetchAllData}
+          tests={tests} results={results} peerId={peerId}
+          onCreateTest={handleCreateTest}
+          onUpdateTest={handleUpdateTest}
+          onDeleteTest={handleDeleteTest}
           onNavigate={() => setView('HOME')}
         />
       )}
