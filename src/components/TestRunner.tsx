@@ -37,27 +37,29 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   });
 
   const [selectedOne, setSelectedOne] = useState<string | null>(null);
-
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentDominant, setCurrentDominant] = useState<string | null>(null);
   const [currentIntensity, setCurrentIntensity] = useState(0);
   const [tiHistory, setTiHistory] = useState<{t: number, v: number}[]>([]); 
   const timerRef = useRef<number | null>(null);
+  const prevTestIdRef = useRef<string | null>(null);
 
   const [placedProducts, setPlacedProducts] = useState<string[]>([]);
   const [customAttributes, setCustomAttributes] = useState<string[]>([]);
   const [newAttribute, setNewAttribute] = useState('');
 
-  const currentProduct = products[currentProductIndex];
-
+  // Inizializza i prodotti solo al cambio del test o al montaggio
   useEffect(() => {
-    if (test.config.randomizePresentation) {
-        setProducts(shuffleArray(test.config.products));
-    } else {
-        setProducts(test.config.products);
+    if (prevTestIdRef.current !== test.id) {
+        if (test.config.randomizePresentation) {
+            setProducts(shuffleArray(test.config.products));
+        } else {
+            setProducts(test.config.products);
+        }
+        setCurrentProductIndex(0);
+        prevTestIdRef.current = test.id;
     }
-    setCurrentProductIndex(0);
   }, [test.id, test.config.products, test.config.randomizePresentation]);
 
   useEffect(() => {
@@ -65,7 +67,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   }, []);
 
   useEffect(() => {
-      if (test.type === TestType.TIME_INTENSITY && isTimerRunning && currentProduct) {
+      if (test.type === TestType.TIME_INTENSITY && isTimerRunning && products[currentProductIndex]) {
+          const currentProduct = products[currentProductIndex];
           const currentTime = parseFloat(elapsedTime.toFixed(1));
           const logKey = currentProduct.code;
           const newEntry: TILogEntry = { time: currentTime, intensity: currentIntensity };
@@ -77,7 +80,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               tiLogs: { ...prev.tiLogs, [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry] }
           }));
       }
-  }, [elapsedTime, test.type, isTimerRunning, currentProduct, currentIntensity]);
+  }, [elapsedTime, test.type, isTimerRunning, currentProductIndex, products, currentIntensity]);
+
+  const currentProduct = products[currentProductIndex];
 
   const handleNextProduct = () => {
     if (currentProductIndex < products.length - 1) {
@@ -125,9 +130,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const startTimer = () => {
     setIsTimerRunning(true);
     setElapsedTime(0);
-    setCurrentDominant(null);
-    setCurrentIntensity(0);
-    setTiHistory([]);
     timerRef.current = window.setInterval(() => { setElapsedTime(prev => prev + 0.5); }, 500);
   };
 
@@ -266,7 +268,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     </div>
   )};
 
-  // Added missing renderHedonic function
   const renderHedonic = () => {
     if (!currentProduct) return null;
     return (
@@ -301,7 +302,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     </div>
   )};
 
-  // Added missing renderCATA function
   const renderCATA = () => {
     if (!currentProduct) return null;
     return (
@@ -345,8 +345,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             return (
               <div key={attr.id} className={`p-6 rounded-[32px] border-2 transition-all ${isChecked ? 'border-teal-500 bg-teal-50/50 shadow-lg scale-[1.02]' : 'border-slate-200 bg-white'}`}>
                 <div className="flex flex-col gap-6">
-                    <button onClick={() => handleRataChange(attr.id, isChecked ? 0 : 1)} className="flex items-center gap-4 group">
-                         <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${isChecked ? 'bg-teal-500 border-teal-500 shadow-teal-200' : 'border-slate-300 bg-slate-50'}`}> {isChecked && <CheckCircle size={20} className="text-white" />} </div>
+                    <button onClick={() => handleRataChange(attr.id, isChecked ? 0 : 1)} className="flex items-center gap-4 group text-left">
+                         <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${isChecked ? 'bg-teal-500 border-teal-500 shadow-teal-200' : 'border-slate-300 bg-slate-50 group-hover:border-teal-300'}`}> {isChecked && <CheckCircle size={20} className="text-white" />} </div>
                         <span className={`font-black text-2xl tracking-tight transition-colors ${isChecked ? 'text-teal-900' : 'text-slate-700 group-hover:text-teal-600'}`}>{attr.name}</span>
                     </button>
                     {isChecked && (
