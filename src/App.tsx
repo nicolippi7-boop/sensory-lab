@@ -24,16 +24,37 @@ const App: React.FC = () => {
   const peerRef = useRef<any>(null);
   const connections = useRef<any[]>([]);
 
-  // Carica i dati da Supabase
+  // Helper per formattare errori ed evitare [object Object]
+  const formatError = (err: any) => {
+    if (!err) return "Errore sconosciuto";
+    if (typeof err === 'string') return err;
+    if (err.message) return err.message;
+    if (err.details) return err.details;
+    if (err.hint) return `${err.message} (Suggerimento: ${err.hint})`;
+    try {
+      return JSON.stringify(err, null, 2);
+    } catch {
+      return String(err);
+    }
+  };
+
   const fetchAllData = async () => {
     try {
-      const { data: testsData } = await supabase.from('tests').select('*').order('created_at', { ascending: false });
+      const { data: testsData, error: tError } = await supabase.from('tests').select('*').order('created_at', { ascending: false });
+      if (tError) {
+        console.error("Errore fetch tests:", formatError(tError));
+        throw tError;
+      }
       if (testsData) setTests(testsData);
 
-      const { data: resultsData } = await supabase.from('results').select('*');
+      const { data: resultsData, error: rError } = await supabase.from('results').select('*');
+      if (rError) {
+        console.error("Errore fetch results:", formatError(rError));
+        throw rError;
+      }
       if (resultsData) setResults(resultsData);
-    } catch (err) {
-      console.error("Errore fetch data:", err);
+    } catch (err: any) {
+      console.error("Dettaglio Errore fetch data:", formatError(err));
     }
   };
 
@@ -41,7 +62,6 @@ const App: React.FC = () => {
     fetchAllData();
   }, []);
 
-  // PeerJS Setup
   useEffect(() => {
     const peer = new Peer();
     peerRef.current = peer;
@@ -73,38 +93,70 @@ const App: React.FC = () => {
       });
     }
 
-    return () => peer.destroy();
-  }, [tests.length]);
+    return () => {
+      if (peerRef.current) peerRef.current.destroy();
+    };
+  }, []);
 
-  // CRUD Real-time per Admin
   const handleCreateTest = async (test: SensoryTest) => {
-    const { error } = await supabase.from('tests').insert([{
-      id: test.id,
-      name: test.name,
-      type: test.type,
-      status: test.status,
-      config: test.config
-    }]);
-    if (!error) fetchAllData();
+    setTests(prev => [test, ...prev]);
+
+    try {
+      const { error } = await supabase.from('tests').insert([{
+        id: test.id,
+        name: test.name,
+        type: test.type,
+        status: test.status,
+        config: test.config,
+        created_at: test.createdAt || new Date().toISOString()
+      }]);
+      
+      if (error) throw error;
+      await fetchAllData();
+    } catch (err: any) {
+      console.error("Errore salvataggio Cloud:", formatError(err));
+    }
   };
 
   const handleUpdateTest = async (test: SensoryTest) => {
-    const { error } = await supabase.from('tests').update({
-      name: test.name,
-      status: test.status,
-      config: test.config
-    }).eq('id', test.id);
-    if (!error) fetchAllData();
+    setTests(prev => prev.map(t => t.id === test.id ? test : t));
+    try {
+      const { error } = await supabase.from('tests').update({
+        name: test.name,
+        status: test.status,
+        config: test.config
+      }).eq('id', test.id);
+      if (error) throw error;
+      await fetchAllData();
+    } catch (err: any) {
+      console.error("Errore modifica Cloud:", formatError(err));
+    }
   };
 
   const handleDeleteTest = async (testId: string) => {
-    const { error } = await supabase.from('tests').delete().eq('id', testId);
-    if (!error) fetchAllData();
+    setTests(prev => prev.filter(t => t.id !== testId));
+    try {
+      const { error } = await supabase.from('tests').delete().eq('id', testId);
+      if (error) throw error;
+      await fetchAllData();
+    } catch (err: any) {
+      console.error("Errore eliminazione Cloud:", formatError(err));
+    }
   };
 
   const handleComplete = async (res: JudgeResult) => {
+    // 1. Aggiornamento Locale immediato
+    setResults(prev => [...prev, res]);
+    
+    // 2. Funzione per pulire lo stato e tornare alla Home
+    const finishTestUI = () => {
+      setView('HOME');
+      setJudgeName('');
+      setActiveTestId('');
+    };
+
     try {
-      // Salvataggio mappato sulle colonne del DB
+      // 3. Tentativo di salvataggio su Supabase
       const { error } = await supabase.from('results').insert([{
         test_id: res.testId,
         judge_name: res.judgeName,
@@ -116,21 +168,24 @@ const App: React.FC = () => {
         sorting_groups: res.sortingGroups || {},
         tds_logs: res.tdsLogs || {},
         ti_logs: res.tiLogs || {},
-        selection: res.triangleSelection || res.pairedSelection || null
+        selection: res.triangleSelection || res.pairedSelection || res.selection || null
       }]);
-
+      
       if (error) throw error;
 
-      setResults(prev => [...prev, res]);
+      // 4. Invio P2P se connesso
       connections.current.forEach(c => c.open && c.send({ type: 'SUBMIT_RESULT', payload: res }));
       
-      setView('HOME');
-      setJudgeName('');
-      setActiveTestId('');
-      alert("✅ Test completato e salvato su Supabase!");
-    } catch (err) {
-      console.error("Salvataggio fallito:", err);
-      alert("❌ Errore nel salvataggio dei dati.");
+      finishTestUI();
+      alert("✅ Test completato con successo e salvato nel cloud!");
+    } catch (err: any) {
+      const errMsg = formatError(err);
+      console.error("Errore invio Cloud:", errMsg);
+      
+      // ANCHE SE C'È UN ERRORE DI FETCH (Supabase non configurata o rete assente), 
+      // chiudiamo il test e avvisiamo l'utente che il dato è solo locale.
+      finishTestUI();
+      alert(`⚠️ Test completato, ma il salvataggio Cloud è fallito (${errMsg}). I dati sono stati salvati solo localmente.`);
     }
   };
 
@@ -160,39 +215,9 @@ const App: React.FC = () => {
             </div>
             <h2 className="text-4xl font-black mb-4 tracking-tighter">Panel Leader</h2>
             <p className="text-slate-300 mb-10 leading-relaxed font-medium">Gestione cloud e analisi AI centralizzata.</p>
-            <button onClick={() => setView('ADMIN_DASHBOARD')} className="w-full py-6 bg-white text-slate-900 font-black rounded-3xl hover:bg-slate-50 shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 text-xl">DASHBOARD <ExternalLink size={24}/></button>
+            <button onClick={() => setView('ADMIN_DASHBOARD')} className="w-full py-6 bg-white text-slate-900 font-bold rounded-3xl shadow-xl hover:bg-indigo-50 transition-all text-xl">ACCEDI ALLA DASHBOARD</button>
           </div>
         </div>
-      )}
-
-      {view === 'JUDGE_LOGIN' && (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-8">
-          <div className="bg-white p-12 rounded-[60px] max-w-md w-full shadow-2xl">
-            <h2 className="text-4xl font-black mb-10 tracking-tighter text-center">Login Giudice</h2>
-            <div className="space-y-6">
-              <div className={`p-4 rounded-2xl flex items-center gap-3 font-black text-xs uppercase tracking-widest ${connectionStatus === 'connected' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                <Wifi size={16}/> {connectionStatus === 'connected' ? 'Connesso' : 'Disconnesso'}
-              </div>
-              <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Tuo Nome" className="w-full p-5 bg-slate-50 rounded-2xl border-none font-bold text-lg" />
-              <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-5 bg-slate-50 rounded-2xl border-none font-bold text-lg">
-                <option value="">Seleziona Test...</option>
-                {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl text-xl hover:bg-indigo-700 transition-all">INIZIA ASSAGGIO</button>
-              <button onClick={() => setView('HOME')} className="w-full text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-4">Annulla</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {view === 'ADMIN_DASHBOARD' && (
-        <AdminDashboard 
-          tests={tests} results={results} peerId={peerId}
-          onCreateTest={handleCreateTest}
-          onUpdateTest={handleUpdateTest}
-          onDeleteTest={handleDeleteTest}
-          onNavigate={() => setView('HOME')}
-        />
       )}
 
       {view === 'JUDGE_RUNNER' && (
@@ -201,6 +226,18 @@ const App: React.FC = () => {
           judgeName={judgeName}
           onComplete={handleComplete}
           onExit={() => setView('HOME')}
+        />
+      )}
+
+      {view === 'ADMIN_DASHBOARD' && (
+        <AdminDashboard 
+          tests={tests}
+          results={results}
+          onCreateTest={handleCreateTest}
+          onUpdateTest={handleUpdateTest}
+          onDeleteTest={handleDeleteTest}
+          onNavigate={() => setView('HOME')}
+          peerId={peerId}
         />
       )}
     </div>

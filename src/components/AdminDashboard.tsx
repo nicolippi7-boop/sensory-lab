@@ -164,54 +164,70 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
   const handleExportExcel = (test: SensoryTest) => {
     const testResults = results.filter(r => r.testId === test.id);
     if (testResults.length === 0) return alert("Nessun dato disponibile.");
+    
     const data: any[] = [];
+    
     testResults.forEach(res => {
-      const common = { Giudice: res.judgeName, Data: res.submittedAt, Progetto: test.name, Metodo: test.type };
+      const commonHeaders = { 
+        Giudice: res.judgeName, 
+        Data_Invio: res.submittedAt, 
+        Test: test.name, 
+        Metodo: test.type 
+      };
       
       if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
-          const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
-          data.push({ 
-              ...common, 
-              Scelta_Giudice: selection, 
-              Risposta_Corretta: test.config.correctOddSampleCode || 'N/D',
-              Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-'
-          });
-      } else if (test.type === TestType.NAPPING && res.nappingData) {
-        Object.entries(res.nappingData).forEach(([code, coords]) => {
+        const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
+        data.push({ 
+          ...commonHeaders, 
+          Scelta_Giudice: selection || '-', 
+          Risposta_Corretta: test.config.correctOddSampleCode || 'N/D',
+          Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-'
+        });
+      } else if (test.type === TestType.NAPPING) {
+        Object.entries(res.nappingData || {}).forEach(([code, coords]) => {
           const c = coords as { x: number; y: number };
-          data.push({ ...common, Prodotto: code, X: c.x.toFixed(2), Y: c.y.toFixed(2) });
+          data.push({ ...commonHeaders, Codice_Campione: code, Coordinata_X: c.x.toFixed(2), Coordinata_Y: c.y.toFixed(2) });
         });
-      } else if (test.type === TestType.SORTING && res.sortingGroups) {
-        Object.entries(res.sortingGroups).forEach(([code, group]) => {
-          data.push({ ...common, Prodotto: code, Gruppo: group });
+      } else if (test.type === TestType.SORTING) {
+        Object.entries(res.sortingGroups || {}).forEach(([code, group]) => {
+          data.push({ ...commonHeaders, Codice_Campione: code, Gruppo_Assegnato: group });
         });
-      } else if (test.type === TestType.TDS && res.tdsLogs) {
-        Object.entries(res.tdsLogs).forEach(([code, logs]) => {
+      } else if (test.type === TestType.TDS) {
+        Object.entries(res.tdsLogs || {}).forEach(([code, logs]) => {
           (logs as any[]).forEach((log: any) => {
             const attrName = test.config.attributes.find(a => a.id === log.attributeId)?.name || log.attributeId;
-            data.push({ ...common, Prodotto: code, Tempo: log.time, Attributo: attrName });
+            data.push({ ...commonHeaders, Codice_Campione: code, Tempo_Secondi: log.time, Attributo_Dominante: attrName });
           });
         });
-      } else if (test.type === TestType.TIME_INTENSITY && res.tiLogs) {
-        Object.entries(res.tiLogs).forEach(([code, logs]) => {
+      } else if (test.type === TestType.TIME_INTENSITY) {
+        Object.entries(res.tiLogs || {}).forEach(([code, logs]) => {
           (logs as any[]).forEach((log: any) => {
-            data.push({ ...common, Prodotto: code, Tempo: log.time, Intensità: log.intensity });
+            data.push({ ...commonHeaders, Codice_Campione: code, Tempo_Secondi: log.time, Intensita_Rilevata: log.intensity });
           });
+        });
+      } else if (test.type === TestType.FLASH_PROFILE) {
+        test.config.products.forEach(prod => {
+          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+          // I descrittori del Flash Profile sono salvati in qdaRatings con chiavi Codice_NomeAttr
+          Object.entries(res.qdaRatings || {}).forEach(([key, val]) => {
+            if (key.startsWith(`${prod.code}_`)) {
+              const attrName = key.replace(`${prod.code}_`, '');
+              row[attrName] = val;
+            }
+          });
+          data.push(row);
         });
       } else {
+        // QDA, HEDONIC, CATA, RATA
         test.config.products.forEach(prod => {
-          const row: any = { ...common, Prodotto: prod.name, Codice: prod.code };
-          
+          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
           test.config.attributes.forEach(attr => {
             const key = `${prod.code}_${attr.id}`;
-            
             if (test.type === TestType.CATA) {
-              const cited = res.cataSelection?.includes(key) ? 1 : 0;
-              row[attr.name] = cited;
+              row[attr.name] = res.cataSelection?.includes(key) ? 1 : 0;
             } else if (test.type === TestType.RATA) {
               const intensity = res.rataSelection?.[key] || 0;
-              row[`${attr.name}_Presenza`] = intensity > 0 ? 1 : 0;
-              row[`${attr.name}_Intensita`] = intensity;
+              row[attr.name] = intensity;
             } else {
               row[attr.name] = res.qdaRatings?.[key] || 0;
             }
@@ -220,10 +236,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
         });
       }
     });
+
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Dati Sensoriali");
-    XLSX.writeFile(wb, `${test.name}_Risultati.xlsx`);
+    XLSX.writeFile(wb, `SensoryLab_${test.name.replace(/\s+/g, '_')}_Report.xlsx`);
   };
 
   const getChartData = (test: SensoryTest) => {
