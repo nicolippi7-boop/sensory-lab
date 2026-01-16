@@ -6,7 +6,7 @@ import { TestRunner } from './components/TestRunner';
 import { ChefHat, ShieldCheck, Wifi, WifiOff, ExternalLink, Activity } from 'lucide-react';
 // @ts-ignore
 import { Peer } from 'peerjs';
-import { supabase } from './lib/supabase'; // Assicurati che il percorso sia corretto
+import { supabase } from './components/supabaseClient';
 
 const App: React.FC = () => {
   // 1. Gestione della Vista (rimane simile)
