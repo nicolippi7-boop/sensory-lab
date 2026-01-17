@@ -22,7 +22,7 @@ const App: React.FC = () => {
   
   const peerRef = useRef<any>(null);
 
-  // --- 1. FUNZIONE CARICAMENTO DATI ---
+  // --- 1. CARICAMENTO DATI ---
   const fetchAllData = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
@@ -47,7 +47,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- 2. LOGICA AUTO-REFRESH ---
+  // --- 2. AUTO-REFRESH OGNI 15 SECONDI ---
   useEffect(() => {
     fetchAllData();
     const interval = setInterval(() => {
@@ -58,11 +58,9 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [view]);
 
-  // --- 3. FUNZIONE RANDOMIZZAZIONE INTEGRATA ---
+  // --- 3. LOGICA RANDOMIZZAZIONE ---
   const getRandomizedTest = (test: SensoryTest) => {
     if (!test || !test.config.products) return test;
-    
-    // Attiva il rimescolamento solo se l'admin ha acceso il tasto
     if (!test.config.randomizePresentation) return test;
     
     const randomizedTest = JSON.parse(JSON.stringify(test));
@@ -72,7 +70,6 @@ const App: React.FC = () => {
       const j = Math.floor(Math.random() * (i + 1));
       [products[i], products[j]] = [products[j], products[i]];
     }
-    
     return randomizedTest;
   };
 
@@ -135,6 +132,7 @@ const App: React.FC = () => {
               <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Tuo Nome" className="w-full p-5 bg-slate-50 rounded-2xl outline-none" />
               <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-5 bg-slate-50 rounded-2xl outline-none">
                 <option value="">Seleziona Test...</option>
+                {/* Mostra solo i test ATTIVI per i giudici */}
                 {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
               <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl shadow-xl">ENTRA IN CABINA</button>
@@ -155,6 +153,7 @@ const App: React.FC = () => {
               <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Il tuo Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none" />
               <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none">
                 <option value="">Scegli una sessione...</option>
+                {/* Mostra solo i test ATTIVI */}
                 {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
               <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl"> INIZIA </button>
@@ -176,6 +175,7 @@ const App: React.FC = () => {
         <AdminDashboard 
           tests={tests} results={results}
           onCreateTest={handleCreateTest}
+          // Questa funzione ora gestisce sia il toggle della randomizzazione che lo stato Aperto/Chiuso
           onUpdateTest={async (updatedTest) => { 
             await supabase.from('tests').update({ 
               status: updatedTest.status, 
