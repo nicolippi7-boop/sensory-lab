@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { SensoryTest, JudgeResult, ViewState, P2PMessage } from './types';
+import type { SensoryTest, JudgeResult, ViewState } from './types';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TestRunner } from './components/TestRunner';
 import { ChefHat, RefreshCw } from 'lucide-react';
@@ -21,9 +21,8 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const peerRef = useRef<any>(null);
-  const connections = useRef<any[]>([]);
 
-  // --- 1. FUNZIONE CARICAMENTO DATI (CON AUTO-REFRESH) ---
+  // --- 1. FUNZIONE CARICAMENTO DATI ---
   const fetchAllData = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
@@ -48,34 +47,30 @@ const App: React.FC = () => {
     }
   };
 
-  // --- 2. LOGICA AUTO-REFRESH (OGNI 15 SECONDI) ---
+  // --- 2. LOGICA AUTO-REFRESH ---
   useEffect(() => {
     fetchAllData();
-    
-    // Imposta un intervallo per aggiornare i dati automaticamente
     const interval = setInterval(() => {
-      // Aggiorna silenziosamente solo se siamo nella Dashboard o in Home
       if (view === 'ADMIN_DASHBOARD' || view === 'HOME') {
         fetchAllData(true);
       }
-    }, 15000); // 15 secondi
-
+    }, 15000);
     return () => clearInterval(interval);
   }, [view]);
 
-  // --- 3. FUNZIONE RANDOMIZZAZIONE CAMPIONI ---
-  // Questa funzione mescola l'ordine dei campioni prima di passarli al TestRunner
+  // --- 3. FUNZIONE RANDOMIZZAZIONE INTEGRATA ---
   const getRandomizedTest = (test: SensoryTest) => {
-    if (!test || !test.config.samples) return test;
+    if (!test || !test.config.products) return test;
     
-    // Creiamo una copia del test per non modificare l'originale
+    // Attiva il rimescolamento solo se l'admin ha acceso il tasto
+    if (!test.config.randomizePresentation) return test;
+    
     const randomizedTest = JSON.parse(JSON.stringify(test));
+    const products = randomizedTest.config.products;
     
-    // Algoritmo Fisher-Yates per mescolare i campioni
-    const samples = randomizedTest.config.samples;
-    for (let i = samples.length - 1; i > 0; i--) {
+    for (let i = products.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [samples[i], samples[j]] = [samples[j], samples[i]];
+      [products[i], products[j]] = [products[j], products[i]];
     }
     
     return randomizedTest;
@@ -125,7 +120,6 @@ const App: React.FC = () => {
 
   return (
     <div className="font-inter min-h-screen bg-slate-50 text-slate-900">
-      {/* Indicatore di caricamento in alto a destra (discreto) */}
       {isRefreshing && (
         <div className="fixed top-4 right-4 z-50 animate-spin text-indigo-600">
           <RefreshCw size={20} />
@@ -171,7 +165,6 @@ const App: React.FC = () => {
 
       {view === 'JUDGE_RUNNER' && activeTestId && (
         <TestRunner 
-          // Passiamo il test con i campioni in ordine casuale
           test={getRandomizedTest(tests.find(t => t.id === activeTestId)!)}
           judgeName={judgeName}
           onComplete={handleComplete}
@@ -183,7 +176,14 @@ const App: React.FC = () => {
         <AdminDashboard 
           tests={tests} results={results}
           onCreateTest={handleCreateTest}
-          onUpdateTest={async () => fetchAllData()}
+          onUpdateTest={async (updatedTest) => { 
+            await supabase.from('tests').update({ 
+              status: updatedTest.status, 
+              config: updatedTest.config,
+              name: updatedTest.name 
+            }).eq('id', updatedTest.id);
+            fetchAllData(); 
+          }}
           onDeleteTest={async (id) => { await supabase.from('tests').delete().eq('id', id); fetchAllData(); }}
           onNavigate={() => setView('HOME')}
           peerId={peerId}
