@@ -17,13 +17,13 @@ const App: React.FC = () => {
   const [results, setResults] = useState<JudgeResult[]>([]);
   const [judgeName, setJudgeName] = useState('');
   const [activeTestId, setActiveTestId] = useState('');
-  const [activeTestSession, setActiveTestSession] = useState<SensoryTest | null>(null);
   const [peerId, setPeerId] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const peerRef = useRef<any>(null);
   const connections = useRef<any[]>([]);
 
+  // --- 1. FUNZIONE CARICAMENTO DATI (CON AUTO-REFRESH) ---
   const fetchAllData = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
@@ -48,80 +48,84 @@ const App: React.FC = () => {
     }
   };
 
+  // --- 2. LOGICA AUTO-REFRESH (OGNI 15 SECONDI) ---
   useEffect(() => {
     fetchAllData();
     
-    // --- AGGIUNTA: AUTO-REFRESH OGNI 15 SECONDI ---
+    // Imposta un intervallo per aggiornare i dati automaticamente
     const interval = setInterval(() => {
-      if (view !== 'JUDGE_RUNNER') {
+      // Aggiorna silenziosamente solo se siamo nella Dashboard o in Home
+      if (view === 'ADMIN_DASHBOARD' || view === 'HOME') {
         fetchAllData(true);
       }
-    }, 15000);
+    }, 15000); // 15 secondi
 
+    return () => clearInterval(interval);
+  }, [view]);
+
+  // --- 3. FUNZIONE RANDOMIZZAZIONE CAMPIONI ---
+  // Questa funzione mescola l'ordine dei campioni prima di passarli al TestRunner
+  const getRandomizedTest = (test: SensoryTest) => {
+    if (!test || !test.config.samples) return test;
+    
+    // Creiamo una copia del test per non modificare l'originale
+    const randomizedTest = JSON.parse(JSON.stringify(test));
+    
+    // Algoritmo Fisher-Yates per mescolare i campioni
+    const samples = randomizedTest.config.samples;
+    for (let i = samples.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [samples[i], samples[j]] = [samples[j], samples[i]];
+    }
+    
+    return randomizedTest;
+  };
+
+  useEffect(() => {
     const peer = new Peer();
     peerRef.current = peer;
     peer.on('open', (id: string) => setPeerId(id));
-    
-    peer.on('connection', (conn: any) => {
-      connections.current.push(conn);
-      conn.on('data', (data: any) => {
-        const msg = data as P2PMessage;
-        if (msg.type === 'SUBMIT_RESULT') fetchAllData(true);
-      });
-    });
+    return () => { if (peerRef.current) peerRef.current.destroy(); };
+  }, []);
 
-    return () => { 
-      if (peerRef.current) peerRef.current.destroy(); 
-      clearInterval(interval);
-    };
-  }, [view]);
-
-  // --- AGGIUNTA: FUNZIONE DI LANCIO CON RANDOMIZZAZIONE ---
-  const handleStartTest = () => {
-    const baseTest = tests.find(t => t.id === activeTestId);
-    if (!baseTest || !judgeName) return;
-
-    let sessionTest = JSON.parse(JSON.stringify(baseTest));
-
-    if (sessionTest.config?.randomizeOrder) {
-      const samples = [...(sessionTest.config.samples || [])];
-      for (let i = samples.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [samples[i], samples[j]] = [samples[j], samples[i]];
-      }
-      sessionTest.config.samples = samples;
-    }
-
-    setActiveTestSession(sessionTest);
-    setView('JUDGE_RUNNER');
+  const handleCreateTest = async (test: SensoryTest) => {
+    try {
+      const { error } = await supabase.from('tests').insert([{
+        id: String(test.id),
+        name: test.name,
+        type: test.type,
+        status: test.status,
+        config: test.config
+      }]);
+      if (error) throw error;
+      await fetchAllData();
+    } catch (err) { console.error(err); }
   };
 
   const handleComplete = async (res: JudgeResult) => {
+    const isJudgeMode = new URLSearchParams(window.location.search).get('mode') === 'judge';
     try {
       const { error } = await supabase.from('results').insert([{
         test_id: String(res.testId),
         judge_name: String(res.judgeName),
         submitted_at: new Date().toISOString(),
-        responses: { 
-          ...res, 
-          actualPresentationOrder: activeTestSession?.config.samples.map((s: any) => s.code) 
-        }
+        responses: res
       }]);
-      
       if (error) throw error;
+
       await fetchAllData();
-      setView('HOME');
+      setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
       setJudgeName('');
       setActiveTestId('');
-      setActiveTestSession(null);
-      alert("✅ Test salvato correttamente!");
+      alert("✅ Test inviato!");
     } catch (err: any) {
-      alert(`Errore salvataggio: ${err.message}`);
+      alert(`Errore: ${err.message}`);
     }
   };
 
   return (
     <div className="font-inter min-h-screen bg-slate-50 text-slate-900">
+      {/* Indicatore di caricamento in alto a destra (discreto) */}
       {isRefreshing && (
         <div className="fixed top-4 right-4 z-50 animate-spin text-indigo-600">
           <RefreshCw size={20} />
@@ -137,13 +141,9 @@ const App: React.FC = () => {
               <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Tuo Nome" className="w-full p-5 bg-slate-50 rounded-2xl outline-none" />
               <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-5 bg-slate-50 rounded-2xl outline-none">
                 <option value="">Seleziona Test...</option>
-                {tests.filter(t => t.status === 'active').map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} {t.config?.randomizeOrder ? '🔄' : ''}
-                  </option>
-                ))}
+                {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
-              <button disabled={!judgeName || !activeTestId} onClick={handleStartTest} className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl shadow-xl">ENTRA IN CABINA</button>
+              <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl shadow-xl">ENTRA IN CABINA</button>
             </div>
           </div>
           <div className="bg-white/10 backdrop-blur-xl p-12 rounded-[60px] max-w-md w-full border border-white/10 text-white">
@@ -153,19 +153,36 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {view === 'JUDGE_RUNNER' && activeTestSession && (
+      {view === 'JUDGE_LOGIN' && (
+        <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-10 shadow-2xl max-w-md w-full">
+            <h2 className="text-2xl font-black mb-6">Assaggiatori</h2>
+            <div className="space-y-6">
+              <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Il tuo Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none" />
+              <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none">
+                <option value="">Scegli una sessione...</option>
+                {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+              <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl"> INIZIA </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === 'JUDGE_RUNNER' && activeTestId && (
         <TestRunner 
-          test={activeTestSession}
+          // Passiamo il test con i campioni in ordine casuale
+          test={getRandomizedTest(tests.find(t => t.id === activeTestId)!)}
           judgeName={judgeName}
           onComplete={handleComplete}
-          onExit={() => { setView('HOME'); setActiveTestSession(null); }}
+          onExit={() => setView(new URLSearchParams(window.location.search).get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME')}
         />
       )}
 
       {view === 'ADMIN_DASHBOARD' && (
         <AdminDashboard 
           tests={tests} results={results}
-          onCreateTest={async (t) => { await supabase.from('tests').insert([t]); fetchAllData(); }}
+          onCreateTest={handleCreateTest}
           onUpdateTest={async () => fetchAllData()}
           onDeleteTest={async (id) => { await supabase.from('tests').delete().eq('id', id); fetchAllData(); }}
           onNavigate={() => setView('HOME')}
