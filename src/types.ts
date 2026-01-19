@@ -1,4 +1,3 @@
-
 export const TestType = {
   TRIANGLE: 'TRIANGLE',
   QDA: 'QDA',
@@ -67,6 +66,12 @@ export interface JudgeResult {
   judgeName: string;
   submittedAt: string;
   triangleSelection?: string; 
+  // --- AGGIUNTE DIN 10955 ---
+  isForcedChoice?: boolean; // true se ipotesi (forzata), false se percepita
+  differenceType?: 'odore' | 'sapore' | 'entrambi'; 
+  differenceIntensity?: 0 | 1 | 2 | 3 | 4; // Scala DIN 0-4
+  differenceDescription?: string; // Descrizione libera della nota anomala
+  // --------------------------
   pairedSelection?: string; 
   qdaRatings?: Record<string, number>;
   flashAttributes?: string[];
