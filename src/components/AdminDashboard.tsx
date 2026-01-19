@@ -42,7 +42,7 @@ const SlideToDelete = ({ onDelete }: { onDelete: () => void }) => {
          <div className="absolute top-1 bottom-1 w-7 bg-white rounded-full shadow-md flex items-center justify-center pointer-events-none transition-all ease-out" style={{ left: `calc(${value}% - ${value * 0.28}px + 4px)` }}>
              <Trash2 size={14} className={value > 85 ? "text-red-600 animate-bounce" : "text-slate-400"} />
          </div>
-         <input type="range" min="0" max="100" step="1" value={value} onChange={handleChange} onPointerUp={handleRelease} className="absolute inset-0 w-full h-full opacity-0 cursor-grab active:cursor-grabbing z-20" />
+         <input type="range" min="1" max="9" step="0.1" value={value} onChange={handleChange} onPointerUp={handleRelease} className="absolute inset-0 w-full h-full opacity-0 cursor-grab active:cursor-grabbing z-20" />
       </div>
     );
 };
