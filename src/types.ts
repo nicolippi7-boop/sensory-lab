@@ -14,9 +14,6 @@ export const TestType = {
 
 export type TestType = typeof TestType[keyof typeof TestType];
 
-// Tipo per la scelta forzata/chiara (DIN 10955)
-export type CertaintyLevel = 'scelta_forzata' | 'differenza_chiara';
-
 export interface Attribute {
   id: string;
   name: string;
@@ -68,15 +65,7 @@ export interface JudgeResult {
   testId: string;
   judgeName: string;
   submittedAt: string;
-  
-  // --- DIN 10955 / TRIANGLE SPECIFIC ---
   triangleSelection?: string; 
-  certainty?: CertaintyLevel;
-  odorScore?: number;          // Scala 0-4
-  flavorScore?: number;        // Scala 0-4
-  differenceDescription?: string;
-  
-  // --- ALTRI TEST ---
   pairedSelection?: string; 
   qdaRatings?: Record<string, number>;
   flashAttributes?: string[];
