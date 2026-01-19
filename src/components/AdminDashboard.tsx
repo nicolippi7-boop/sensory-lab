@@ -354,7 +354,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                           <div className="col-span-2">
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Tipo Scala</label>
                               <select className="w-full p-4 border-2 border-white rounded-2xl bg-white font-bold outline-none focus:border-indigo-500 transition-all" value={attrScale} onChange={e => setAttrScale(e.target.value as any)}>
-                                  <option value="linear">Lineare (0-100)</option>
+                                  <option value="linear">Lineare (1-9)</option>
                                   <option value="likert5">Likert 5 pt</option>
                                   <option value="likert7">Likert 7 pt</option>
                                   <option value="likert9">9 pt (Edonica)</option>
