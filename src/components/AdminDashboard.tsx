@@ -4,7 +4,7 @@ import type { SensoryTest, Product, Attribute, TestConfig, JudgeResult } from '.
 import { suggestAttributes, analyzeResults } from '../services/geminiService';
 import { Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, Download, Pencil, Trash2, Save, QrCode, X, Copy, Check, Wifi, Layers, Activity, Target, Anchor, Shuffle, RefreshCw } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { supabase } from './supabaseClient'; // Assicurati che il percorso sia corretto
+import { supabase } from './supabaseClient'; 
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
@@ -53,15 +53,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
   const [selectedTest, setSelectedTest] = useState<SensoryTest | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [copied, setCopied] = useState(false);
-
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTestName, setNewTestName] = useState('');
   const [newTestType, setNewTestType] = useState<TestType>(TestType.QDA);
   const [randomize, setRandomize] = useState(false);
   const [correctAnswerCode, setCorrectAnswerCode] = useState('');
-  const [products, setProducts] = useState<Product[]>([{ id: '1', name: 'Campione A', code: '101' }, { id: '2', name: 'Campione B', code: '254' }]);
+  const [products, setProducts] = useState<Product[]>([{ id: '1', name: 'Controllo (A)', code: '101' }, { id: '2', name: 'Test (B)', code: '254' }]);
   const [attributes, setAttributes] = useState<Attribute[]>([]);
-  
   const [attrName, setAttrName] = useState('');
   const [attrDesc, setAttrDesc] = useState('');
   const [attrMin, setAttrMin] = useState('Debole');
@@ -69,7 +67,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
   const [attrScale, setAttrScale] = useState<'linear' | 'likert5' | 'likert7' | 'likert9'>('linear');
   const [attrRefValue, setAttrRefValue] = useState<string>('');
   const [attrRefLabel, setAttrRefLabel] = useState<string>('');
-
   const [aiLoading, setAiLoading] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -105,19 +102,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
         config: testConfig
     };
 
-    if (editingId) {
-        onUpdateTest(testData);
-    } else {
-        onCreateTest(testData);
-    }
-
+    if (editingId) { onUpdateTest(testData); } else { onCreateTest(testData); }
     resetForm();
     setView('LIST');
   };
 
   const resetForm = () => {
       setEditingId(null); setNewTestName(''); setNewTestType(TestType.QDA); setRandomize(false);
-      setProducts([{ id: '1', name: 'Campione A', code: '101' }, { id: '2', name: 'Campione B', code: '254' }]);
+      setProducts([{ id: '1', name: 'Controllo (A)', code: '101' }, { id: '2', name: 'Test (B)', code: '254' }]);
       setAttributes([]); resetAttrInput(); setCorrectAnswerCode(''); setProductDescForAi('');
   };
 
@@ -125,16 +117,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
 
   const handleAddAttribute = () => {
       if (!attrName.trim()) return;
-      setAttributes([...attributes, { 
-          id: generateId(), 
-          name: attrName.trim(), 
-          description: attrDesc.trim(), 
-          leftAnchor: attrMin, 
-          rightAnchor: attrMax, 
-          scaleType: attrScale,
-          referenceValue: attrRefValue !== '' ? Number(attrRefValue) : undefined,
-          referenceLabel: attrRefLabel.trim() || undefined
-      }]);
+      setAttributes([...attributes, { id: generateId(), name: attrName.trim(), description: attrDesc.trim(), leftAnchor: attrMin, rightAnchor: attrMax, scaleType: attrScale, referenceValue: attrRefValue !== '' ? Number(attrRefValue) : undefined, referenceLabel: attrRefLabel.trim() || undefined }]);
       resetAttrInput();
   };
 
@@ -149,7 +132,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
 
   const getDefaultInstructions = (type: TestType): string => {
       switch(type) {
-          case TestType.TRIANGLE: return "Seleziona il campione diverso.";
+          case TestType.TRIANGLE: return "DIN 10955: Seleziona il campione diverso tra i tre presentati.";
           case TestType.QDA: return "Valuta l'intensità di ogni attributo.";
           case TestType.TDS: return "Seleziona l'attributo dominante nel tempo.";
           case TestType.NAPPING: return "Posiziona i campioni sulla mappa sensoriale.";
@@ -161,19 +144,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
       }
   };
 
-  const handleResetResults = async (test: SensoryTest) => {
-    const count = results.filter(r => r.testId === test.id).length;
-    if (count === 0) return alert("Nessun risultato da cancellare.");
-    
-    if(window.confirm(`⚠️ SEI SICURO? Vuoi cancellare tutte le ${count} risposte per "${test.name}"? Il test rimarrà configurato, ma perderai tutti i dati degli assaggiatori.`)) {
+  const handleResetResults = async (testId: string) => {
+    if (window.confirm("⚠️ Sei sicuro? Questo cancellerà tutti i dati raccolti per questo test. L'azione non è reversibile.")) {
       try {
-        const { error } = await supabase.from('results').delete().eq('test_id', test.id);
+        const { error } = await supabase.from('results').delete().eq('test_id', testId);
         if (error) throw error;
-        alert("✅ Risultati azzerati con successo.");
-        onUpdateTest(test); // Trigger refresh
-      } catch (err: any) {
-        alert("Errore durante la cancellazione: " + err.message);
-      }
+        alert("Risultati svuotati con successo.");
+        onUpdateTest(tests.find(t => t.id === testId)!);
+      } catch (e: any) { alert("Errore: " + e.message); }
     }
   };
 
@@ -284,7 +262,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                               <option value={TestType.FLASH_PROFILE}>Flash Profile</option>
                           </optgroup>
                           <optgroup label="Discriminanti">
-                              <option value={TestType.TRIANGLE}>Test Triangolare</option>
+                              <option value={TestType.TRIANGLE}>Test Triangolare (DIN 10955)</option>
                               <option value={TestType.PAIRED_COMPARISON}>Confronto a Coppie</option>
                           </optgroup>
                           <optgroup label="Raggruppamento">
@@ -299,19 +277,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
 
               <div className="flex items-center justify-between p-6 bg-indigo-50/50 rounded-3xl border-2 border-indigo-100/50">
                   <div className="flex items-center gap-4">
-                      <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600">
-                          <Shuffle size={20} />
-                      </div>
+                      <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600"> <Shuffle size={20} /> </div>
                       <div>
                           <h4 className="font-black text-indigo-900 text-sm">Randomizzazione Campioni</h4>
                           <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">L'ordine dei campioni sarà diverso per ogni assaggiatore.</p>
                       </div>
                   </div>
-                  <button 
-                      type="button"
-                      onClick={() => setRandomize(!randomize)}
-                      className={`w-16 h-9 rounded-full transition-all relative shadow-inner ${randomize ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                  >
+                  <button type="button" onClick={() => setRandomize(!randomize)} className={`w-16 h-9 rounded-full transition-all relative shadow-inner ${randomize ? 'bg-indigo-600' : 'bg-slate-200'}`}>
                       <div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full shadow-md transition-all ${randomize ? 'left-8' : 'left-1.5'}`} />
                   </button>
               </div>
@@ -421,8 +393,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                         <h3 className="text-2xl font-black text-slate-900 mb-8 leading-tight tracking-tighter">{test.name}</h3>
                         <div className="flex items-center gap-2 border-t-2 border-slate-50 pt-6">
                             <button onClick={() => { setSelectedTest(test); setView('DETAIL'); }} className="flex-1 py-3 text-indigo-600 font-black hover:bg-indigo-50 rounded-2xl flex items-center justify-center gap-2 transition-all"> <BarChart2 size={20}/> ANALISI</button>
-                            {/* TASTO RESET AGGIUNTO QUI */}
-                            <button onClick={() => handleResetResults(test)} className="p-3 text-amber-500 hover:bg-amber-50 rounded-2xl transition-all" title="Svuota Risposte"><RefreshCw size={22}/></button>
+                            <button onClick={() => handleResetResults(test.id)} className="p-3 text-amber-500 hover:bg-amber-50 rounded-2xl transition-all" title="Svuota Risultati"><RefreshCw size={22}/></button>
                             <button onClick={() => handleExportExcel(test)} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Download size={22}/></button>
                             <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all"><Pencil size={20}/></button>
                             <SlideToDelete onDelete={() => onDeleteTest(test.id)} />
@@ -434,9 +405,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
             {view === 'DETAIL' && selectedTest && (
                 <div className="mt-16 bg-white p-12 rounded-[50px] shadow-2xl border border-slate-100">
                     <div className="flex justify-between items-center mb-12">
-                        <div>
-                            <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{selectedTest.name}</h2>
-                        </div>
+                        <div> <h2 className="text-4xl font-black text-slate-900 tracking-tighter">{selectedTest.name}</h2> </div>
                         <button onClick={() => setView('LIST')} className="text-slate-400 hover:text-slate-900 font-black tracking-widest uppercase text-xs">Chiudi X</button>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
