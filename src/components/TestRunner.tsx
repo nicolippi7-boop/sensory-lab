@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute } from '../types';
-import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, AlertCircle } from 'lucide-react';
+import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 interface TestRunnerProps {
@@ -49,12 +49,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [placedProducts, setPlacedProducts] = useState<string[]>([]);
   const [customAttributes, setCustomAttributes] = useState<string[]>([]);
   const [newAttribute, setNewAttribute] = useState('');
-
-  // Stati aggiuntivi per DIN 10955
-  const [isForcedChoice, setIsForcedChoice] = useState<boolean | null>(null);
-  const [diffType, setDiffType] = useState<'odore' | 'sapore' | 'entrambi' | null>(null);
-  const [diffIntensity, setDiffIntensity] = useState<0 | 1 | 2 | 3 | 4 | null>(null);
-  const [diffDescription, setDiffDescription] = useState('');
 
   useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
@@ -106,17 +100,18 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   };
 
+  // --- FUNZIONE CORRETTA: ALLINEATA AD APP.TSX E AL DATABASE ---
   const submitAll = async () => {
     const finalResult: JudgeResult = {
         ...result as JudgeResult,
         id: generateId(),
         submittedAt: new Date().toISOString(),
-        triangleSelection: selectedOne || undefined,
-        isForcedChoice: isForcedChoice !== null ? isForcedChoice : undefined,
-        differenceType: diffType || undefined,
-        differenceIntensity: diffIntensity !== null ? diffIntensity : undefined,
-        differenceDescription: diffDescription || undefined
+        selection: selectedOne || undefined
     };
+    
+    // Non facciamo più la chiamata supabase.from('results').insert qui!
+    // Deleghiamo tutto alla funzione onComplete passata da App.tsx
+    // che è già configurata per gestire il database correttamente.
     onComplete(finalResult);
   };
 
@@ -179,100 +174,23 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       setResult(prev => ({ ...prev, sortingGroups: { ...prev.sortingGroups, [prodCode]: group } }));
   };
 
-  // --- RENDERING TRIANGOLARE AGGIORNATO DIN 10955 ---
-  const renderTriangle = () => {
-    const isComplete = selectedOne && isForcedChoice !== null && diffType !== null && diffIntensity !== null;
-
-    return (
-      <div className="max-w-3xl mx-auto space-y-10 pb-20">
-        {/* Step 1: Identificazione */}
-        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
-          <h3 className="text-xl font-black mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs">1</span>
-            Seleziona il campione DIVERSO
-          </h3>
-          <div className="flex justify-center gap-4">
-            {products.map(p => (
-              <button 
-                key={p.code} 
-                onClick={() => setSelectedOne(p.code)} 
-                className={`flex-1 py-8 rounded-2xl border-4 font-mono text-3xl font-black transition-all ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-50 bg-slate-50 text-slate-400 hover:border-slate-200'}`}
-              > 
-                {p.code} 
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Step 2: Certezza */}
-        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
-          <h3 className="text-xl font-black mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs">2</span>
-            La tua scelta è stata:
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => setIsForcedChoice(true)} className={`p-4 rounded-xl border-2 font-bold transition-all ${isForcedChoice === true ? 'bg-amber-50 border-amber-500 text-amber-700' : 'bg-white border-slate-100 text-slate-400'}`}>Solo ipotesi (Senza certezza)</button>
-            <button onClick={() => setIsForcedChoice(false)} className={`p-4 rounded-xl border-2 font-bold transition-all ${isForcedChoice === false ? 'bg-green-50 border-green-500 text-green-700' : 'bg-white border-slate-100 text-slate-400'}`}>Percepita (Certezza)</button>
-          </div>
-        </div>
-
-        {/* Step 3: Tipo Differenza */}
-        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
-          <h3 className="text-xl font-black mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs">3</span>
-            Natura della differenza
-          </h3>
-          <div className="flex gap-3 mb-6">
-            {(['odore', 'sapore', 'entrambi'] as const).map(t => (
-              <button key={t} onClick={() => setDiffType(t)} className={`flex-1 py-3 rounded-xl border-2 font-black text-xs uppercase tracking-widest transition-all ${diffType === t ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}>{t}</button>
-            ))}
-          </div>
-          <textarea 
-            value={diffDescription}
-            onChange={e => setDiffDescription(e.target.value)}
-            placeholder="Descrivi la differenza riscontrata (opzionale)..."
-            className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-indigo-500 outline-none font-medium text-sm"
-            rows={2}
-          />
-        </div>
-
-        {/* Step 4: Intensità DIN */}
-        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
-          <h3 className="text-xl font-black mb-6 flex items-center gap-3">
-            <span className="w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs">4</span>
-            Intensità della differenza (Scala DIN)
-          </h3>
-          <div className="flex justify-between items-center mb-4">
-            {[0, 1, 2, 3, 4].map(v => (
-              <button 
-                key={v} 
-                onClick={() => setDiffIntensity(v as any)} 
-                className={`w-12 h-12 rounded-xl font-black text-lg transition-all ${diffIntensity === v ? 'bg-indigo-600 text-white scale-110 shadow-lg' : 'bg-slate-50 text-slate-400'}`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-          <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-tighter">
-            <span>Nessuna</span>
-            <span>Appena perc.</span>
-            <span>Debole</span>
-            <span>Chiara</span>
-            <span>Molto forte</span>
-          </div>
-        </div>
-
-        <button 
-          disabled={!isComplete} 
-          onClick={submitAll} 
-          className="w-full py-6 bg-slate-900 text-white font-black rounded-[24px] disabled:opacity-30 hover:bg-slate-800 shadow-2xl transition-all text-xl uppercase tracking-widest flex items-center justify-center gap-3"
-        > 
-          <CheckCircle /> Conferma e Invia 
-        </button>
-        {!isComplete && <p className="text-center text-xs font-bold text-slate-400 flex items-center justify-center gap-2"><AlertCircle size={14}/> Completa tutti i passaggi obbligatori DIN 10955</p>}
+  const renderTriangle = () => (
+    <div className="flex flex-col items-center justify-center space-y-12">
+      <div className="text-center">
+          <h3 className="text-2xl font-bold text-slate-800 mb-2">Test Triangolare</h3>
+          <p className="text-slate-500">Seleziona il campione <span className="font-bold text-indigo-600">DIVERSO</span> dagli altri due.</p>
       </div>
-    );
-  };
+      <div className="flex flex-wrap justify-center gap-8">
+        {products.map(p => (
+          <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`w-40 h-40 rounded-full border-4 flex items-center justify-center text-3xl font-black font-mono transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-600 text-white scale-110 shadow-xl' : 'border-slate-200 hover:border-indigo-300 bg-white text-slate-700'}`}> {p.code} </button>
+        ))}
+      </div>
+      <button disabled={!selectedOne} onClick={() => {
+          const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), triangleSelection: selectedOne || '' };
+          onComplete(final);
+      }} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
+    </div>
+  );
 
   const renderPairedComparison = () => (
     <div className="flex flex-col items-center justify-center space-y-12">
