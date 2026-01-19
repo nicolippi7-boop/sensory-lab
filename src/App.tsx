@@ -22,7 +22,6 @@ const App: React.FC = () => {
   
   const peerRef = useRef<any>(null);
 
-  // --- 1. CARICAMENTO DATI ---
   const fetchAllData = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
@@ -40,32 +39,22 @@ const App: React.FC = () => {
         }));
         setResults(formattedResults);
       }
-    } catch (err) {
-      console.error("Errore fetch:", err);
-    } finally {
-      setIsRefreshing(false);
-    }
+    } catch (err) { console.error("Errore fetch:", err); } 
+    finally { setIsRefreshing(false); }
   };
 
-  // --- 2. AUTO-REFRESH OGNI 15 SECONDI ---
   useEffect(() => {
     fetchAllData();
     const interval = setInterval(() => {
-      if (view === 'ADMIN_DASHBOARD' || view === 'HOME') {
-        fetchAllData(true);
-      }
+      if (view === 'ADMIN_DASHBOARD' || view === 'HOME') fetchAllData(true);
     }, 15000);
     return () => clearInterval(interval);
   }, [view]);
 
-  // --- 3. LOGICA RANDOMIZZAZIONE ---
   const getRandomizedTest = (test: SensoryTest) => {
-    if (!test || !test.config.products) return test;
-    if (!test.config.randomizePresentation) return test;
-    
+    if (!test || !test.config.products || !test.config.randomizePresentation) return test;
     const randomizedTest = JSON.parse(JSON.stringify(test));
     const products = randomizedTest.config.products;
-    
     for (let i = products.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [products[i], products[j]] = [products[j], products[i]];
@@ -82,14 +71,7 @@ const App: React.FC = () => {
 
   const handleCreateTest = async (test: SensoryTest) => {
     try {
-      const { error } = await supabase.from('tests').insert([{
-        id: String(test.id),
-        name: test.name,
-        type: test.type,
-        status: test.status,
-        config: test.config
-      }]);
-      if (error) throw error;
+      await supabase.from('tests').insert([{ id: String(test.id), name: test.name, type: test.type, status: test.status, config: test.config }]);
       await fetchAllData();
     } catch (err) { console.error(err); }
   };
@@ -97,31 +79,17 @@ const App: React.FC = () => {
   const handleComplete = async (res: JudgeResult) => {
     const isJudgeMode = new URLSearchParams(window.location.search).get('mode') === 'judge';
     try {
-      const { error } = await supabase.from('results').insert([{
-        test_id: String(res.testId),
-        judge_name: String(res.judgeName),
-        submitted_at: new Date().toISOString(),
-        responses: res
-      }]);
-      if (error) throw error;
-
+      await supabase.from('results').insert([{ test_id: String(res.testId), judge_name: String(res.judgeName), submitted_at: new Date().toISOString(), responses: res }]);
       await fetchAllData();
       setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
-      setJudgeName('');
-      setActiveTestId('');
+      setJudgeName(''); setActiveTestId('');
       alert("✅ Test inviato!");
-    } catch (err: any) {
-      alert(`Errore: ${err.message}`);
-    }
+    } catch (err: any) { alert(`Errore: ${err.message}`); }
   };
 
   return (
     <div className="font-inter min-h-screen bg-slate-50 text-slate-900">
-      {isRefreshing && (
-        <div className="fixed top-4 right-4 z-50 animate-spin text-indigo-600">
-          <RefreshCw size={20} />
-        </div>
-      )}
+      {isRefreshing && <div className="fixed top-4 right-4 z-50 animate-spin text-indigo-600"><RefreshCw size={20} /></div>}
 
       {view === 'HOME' && (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-8 gap-8 flex-col lg:flex-row">
@@ -132,7 +100,6 @@ const App: React.FC = () => {
               <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Tuo Nome" className="w-full p-5 bg-slate-50 rounded-2xl outline-none" />
               <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-5 bg-slate-50 rounded-2xl outline-none">
                 <option value="">Seleziona Test...</option>
-                {/* Mostra solo i test ATTIVI per i giudici */}
                 {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
               <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-6 bg-indigo-600 text-white font-black rounded-3xl shadow-xl">ENTRA IN CABINA</button>
@@ -153,7 +120,6 @@ const App: React.FC = () => {
               <input value={judgeName} onChange={e => setJudgeName(e.target.value)} placeholder="Il tuo Nome" className="w-full p-4 bg-slate-50 rounded-2xl outline-none" />
               <select value={activeTestId} onChange={e => setActiveTestId(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl outline-none">
                 <option value="">Scegli una sessione...</option>
-                {/* Mostra solo i test ATTIVI */}
                 {tests.filter(t => t.status === 'active').map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
               <button disabled={!judgeName || !activeTestId} onClick={() => setView('JUDGE_RUNNER')} className="w-full py-5 bg-indigo-600 text-white font-black rounded-3xl"> INIZIA </button>
@@ -165,28 +131,20 @@ const App: React.FC = () => {
       {view === 'JUDGE_RUNNER' && activeTestId && (
         <TestRunner 
           test={getRandomizedTest(tests.find(t => t.id === activeTestId)!)}
-          judgeName={judgeName}
-          onComplete={handleComplete}
+          judgeName={judgeName} onComplete={handleComplete}
           onExit={() => setView(new URLSearchParams(window.location.search).get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME')}
         />
       )}
 
       {view === 'ADMIN_DASHBOARD' && (
         <AdminDashboard 
-          tests={tests} results={results}
-          onCreateTest={handleCreateTest}
-          // Questa funzione ora gestisce sia il toggle della randomizzazione che lo stato Aperto/Chiuso
-          onUpdateTest={async (updatedTest) => { 
-            await supabase.from('tests').update({ 
-              status: updatedTest.status, 
-              config: updatedTest.config,
-              name: updatedTest.name 
-            }).eq('id', updatedTest.id);
+          tests={tests} results={results} onCreateTest={handleCreateTest}
+          onUpdateTest={async (updated) => { 
+            await supabase.from('tests').update({ status: updated.status, config: updated.config, name: updated.name }).eq('id', updated.id);
             fetchAllData(); 
           }}
           onDeleteTest={async (id) => { await supabase.from('tests').delete().eq('id', id); fetchAllData(); }}
-          onNavigate={() => setView('HOME')}
-          peerId={peerId}
+          onNavigate={() => setView('HOME')} peerId={peerId}
         />
       )}
     </div>

@@ -2,8 +2,9 @@ import React, { useState, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, Product, Attribute, TestConfig, JudgeResult } from '../types';
 import { suggestAttributes, analyzeResults } from '../services/geminiService';
-import { Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, Download, Pencil, Trash2, Save, QrCode, X, Copy, Check, Wifi, Layers, Activity, Target, Anchor, Shuffle } from 'lucide-react';
+import { Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, Download, Pencil, Trash2, Save, QrCode, X, Copy, Check, Wifi, Layers, Activity, Target, Anchor, Shuffle, RefreshCw } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { supabase } from './supabaseClient'; // Assicurati che il percorso sia corretto
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
@@ -91,7 +92,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
         products,
         attributes,
         durationSeconds: (newTestType === TestType.TDS || newTestType === TestType.TIME_INTENSITY) ? 60 : undefined,
-        // MODIFICA: Utilizziamo lo stato 'randomize'
         randomizePresentation: randomize,
         correctOddSampleCode: (newTestType === TestType.TRIANGLE || newTestType === TestType.PAIRED_COMPARISON) ? correctAnswerCode : undefined
     };
@@ -142,7 +142,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
     if (!productDescForAi) return;
     setAiLoading(true);
     const suggestions = await suggestAttributes(productDescForAi);
-    const newAttrs: Attribute[] = suggestions.map(name => ({ id: generateId(), name, category: 'taste', scaleType: 'linear', leftAnchor: 'Debole', rightAnchor: 'Forte', description: '' }));
+    const newAttrs: Attribute[] = suggestions.map(name => ({ id: generateId(), name, category: 'taste', scaleType: 'linear', leftAnchor: 'Debole', rightAnchor: 'Forte', description: '' } as Attribute));
     setAttributes([...attributes, ...newAttrs]);
     setAiLoading(false);
   };
@@ -159,6 +159,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
           case TestType.RATA: return "Seleziona i descrittori e valuta l'intensità.";
           default: return "Assaggia e valuta i campioni.";
       }
+  };
+
+  const handleResetResults = async (test: SensoryTest) => {
+    const count = results.filter(r => r.testId === test.id).length;
+    if (count === 0) return alert("Nessun risultato da cancellare.");
+    
+    if(window.confirm(`⚠️ SEI SICURO? Vuoi cancellare tutte le ${count} risposte per "${test.name}"? Il test rimarrà configurato, ma perderai tutti i dati degli assaggiatori.`)) {
+      try {
+        const { error } = await supabase.from('results').delete().eq('test_id', test.id);
+        if (error) throw error;
+        alert("✅ Risultati azzerati con successo.");
+        onUpdateTest(test); // Trigger refresh
+      } catch (err: any) {
+        alert("Errore durante la cancellazione: " + err.message);
+      }
+    }
   };
 
   const handleExportExcel = (test: SensoryTest) => {
@@ -281,7 +297,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                   </div>
               </div>
 
-              {/* MODIFICA: Integrazione del toggle Randomizzazione nel design originale */}
               <div className="flex items-center justify-between p-6 bg-indigo-50/50 rounded-3xl border-2 border-indigo-100/50">
                   <div className="flex items-center gap-4">
                       <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600">
@@ -406,6 +421,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                         <h3 className="text-2xl font-black text-slate-900 mb-8 leading-tight tracking-tighter">{test.name}</h3>
                         <div className="flex items-center gap-2 border-t-2 border-slate-50 pt-6">
                             <button onClick={() => { setSelectedTest(test); setView('DETAIL'); }} className="flex-1 py-3 text-indigo-600 font-black hover:bg-indigo-50 rounded-2xl flex items-center justify-center gap-2 transition-all"> <BarChart2 size={20}/> ANALISI</button>
+                            {/* TASTO RESET AGGIUNTO QUI */}
+                            <button onClick={() => handleResetResults(test)} className="p-3 text-amber-500 hover:bg-amber-50 rounded-2xl transition-all" title="Svuota Risposte"><RefreshCw size={22}/></button>
                             <button onClick={() => handleExportExcel(test)} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Download size={22}/></button>
                             <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all"><Pencil size={20}/></button>
                             <SlideToDelete onDelete={() => onDeleteTest(test.id)} />
