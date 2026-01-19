@@ -50,12 +50,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [customAttributes, setCustomAttributes] = useState<string[]>([]);
   const [newAttribute, setNewAttribute] = useState('');
 
-  // Stati DIN 10955
-  const [isForcedChoice, setIsForcedChoice] = useState<'scelta_forzata' | 'differenza_chiara' | null>(null);
-  const [odorScore, setOdorScore] = useState<number>(0);
-  const [flavorScore, setFlavorScore] = useState<number>(0);
-  const [diffDescription, setDiffDescription] = useState('');
-
   useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
         if (test.config.randomizePresentation) {
@@ -106,18 +100,18 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   };
 
+  // --- FUNZIONE CORRETTA: ALLINEATA AD APP.TSX E AL DATABASE ---
   const submitAll = async () => {
     const finalResult: JudgeResult = {
         ...result as JudgeResult,
         id: generateId(),
         submittedAt: new Date().toISOString(),
-        selection: selectedOne || undefined,
-        // Dati DIN aggiuntivi
-        certainty: isForcedChoice || undefined,
-        odorScore: odorScore,
-        flavorScore: flavorScore,
-        differenceDescription: diffDescription || undefined
+        selection: selectedOne || undefined
     };
+    
+    // Non facciamo più la chiamata supabase.from('results').insert qui!
+    // Deleghiamo tutto alla funzione onComplete passata da App.tsx
+    // che è già configurata per gestire il database correttamente.
     onComplete(finalResult);
   };
 
@@ -180,68 +174,23 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       setResult(prev => ({ ...prev, sortingGroups: { ...prev.sortingGroups, [prodCode]: group } }));
   };
 
-  const getDinLabel = (score: number) => {
-    switch(score) {
-      case 0: return "Nessuna";
-      case 1: return "Appena percepibile";
-      case 2: return "Debole";
-      case 3: return "Chiara";
-      case 4: return "Forte";
-      default: return "";
-    }
-  };
-
-  const renderTriangle = () => {
-    const isComplete = selectedOne !== null && isForcedChoice !== null;
-    return (
-      <div className="max-w-3xl mx-auto space-y-10 pb-20 animate-in fade-in duration-700">
-        <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100">
-          <h3 className="text-sm font-black text-indigo-600 uppercase mb-10 flex items-center gap-3">
-            <span className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px]">1</span>
-            Seleziona il campione differente
-          </h3>
-          <div className="grid grid-cols-3 gap-6">
-            {products.map(p => (
-              <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`aspect-square rounded-[35px] border-8 font-black text-4xl transition-all active:scale-95 ${selectedOne === p.code ? 'border-indigo-100 bg-indigo-600 text-white scale-105 shadow-xl' : 'border-transparent bg-slate-50 text-slate-900 hover:bg-slate-100'}`}> {p.code} </button>
-            ))}
-          </div>
-        </div>
-        <div className={`transition-all duration-500 ${selectedOne ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-          <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100">
-            <h3 className="text-sm font-black text-indigo-600 uppercase mb-8 flex items-center gap-3">
-              <span className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px]">2</span>
-              La tua scelta è stata:
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => setIsForcedChoice('scelta_forzata')} className={`py-8 rounded-[30px] font-black text-sm uppercase border-2 transition-all ${isForcedChoice === 'scelta_forzata' ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}> Scelta Forzata </button>
-              <button onClick={() => setIsForcedChoice('differenza_chiara')} className={`py-8 rounded-[30px] font-black text-sm uppercase border-2 transition-all ${isForcedChoice === 'differenza_chiara' ? 'bg-slate-900 border-slate-900 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}> Differenza Chiara </button>
-            </div>
-          </div>
-        </div>
-        <div className={`transition-all duration-500 ${isForcedChoice ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-          <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100 space-y-12">
-            <h3 className="text-sm font-black text-indigo-600 uppercase flex items-center gap-3">
-              <span className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px]">3</span>
-              Intensità della differenza (Scala DIN 0-4)
-            </h3>
-            <div className="space-y-6">
-              <div className="flex justify-between items-baseline"><label className="text-2xl font-black text-slate-800">Odore</label><div className="text-right"><span className="text-4xl font-black text-indigo-600 block">{odorScore}</span><span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">{getDinLabel(odorScore)}</span></div></div>
-              <input type="range" min="0" max="4" step="1" value={odorScore} onChange={e => setOdorScore(Number(e.target.value))} className="w-full h-4 bg-slate-100 rounded-full appearance-none accent-indigo-600" />
-            </div>
-            <div className="space-y-6">
-              <div className="flex justify-between items-baseline"><label className="text-2xl font-black text-slate-800">Sapore</label><div className="text-right"><span className="text-4xl font-black text-indigo-600 block">{flavorScore}</span><span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">{getDinLabel(flavorScore)}</span></div></div>
-              <input type="range" min="0" max="4" step="1" value={flavorScore} onChange={e => setFlavorScore(Number(e.target.value))} className="w-full h-4 bg-slate-100 rounded-full appearance-none accent-indigo-600" />
-            </div>
-            <textarea value={diffDescription} onChange={e => setDiffDescription(e.target.value)} placeholder="Descrizione della differenza..." className="w-full p-6 bg-slate-50 rounded-[30px] border-none outline-none font-medium text-slate-600 italic" rows={3} />
-          </div>
-        </div>
-        <button disabled={!isComplete} onClick={() => {
-          const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), triangleSelection: selectedOne || '', certainty: isForcedChoice, odorScore, flavorScore, differenceDescription: diffDescription };
-          onComplete(final);
-        }} className="w-full py-10 bg-indigo-600 text-white font-black rounded-[40px] disabled:opacity-20 hover:bg-indigo-700 text-2xl uppercase shadow-2xl transition-all"> Conferma Scelta </button>
+  const renderTriangle = () => (
+    <div className="flex flex-col items-center justify-center space-y-12">
+      <div className="text-center">
+          <h3 className="text-2xl font-bold text-slate-800 mb-2">Test Triangolare</h3>
+          <p className="text-slate-500">Seleziona il campione <span className="font-bold text-indigo-600">DIVERSO</span> dagli altri due.</p>
       </div>
-    );
-  };
+      <div className="flex flex-wrap justify-center gap-8">
+        {products.map(p => (
+          <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`w-40 h-40 rounded-full border-4 flex items-center justify-center text-3xl font-black font-mono transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-600 text-white scale-110 shadow-xl' : 'border-slate-200 hover:border-indigo-300 bg-white text-slate-700'}`}> {p.code} </button>
+        ))}
+      </div>
+      <button disabled={!selectedOne} onClick={() => {
+          const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), triangleSelection: selectedOne || '' };
+          onComplete(final);
+      }} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
+    </div>
+  );
 
   const renderPairedComparison = () => (
     <div className="flex flex-col items-center justify-center space-y-12">
@@ -276,8 +225,13 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                 </div>
                 <div className="flex items-center justify-between gap-2 relative py-4">
                     {attr.referenceValue !== undefined && (
-                        <div className="absolute top-0 w-px h-full border-l-2 border-dashed border-indigo-400 pointer-events-none z-0 opacity-50 flex flex-col items-center" style={{ left: `calc(${((attr.referenceValue - 1) / (points - 1)) * 100}% + 0px)` }} >
-                            <div className="bg-indigo-600 text-white text-[8px] px-1 rounded-sm -mt-2 uppercase font-black tracking-tighter shadow-sm whitespace-nowrap"> {attr.referenceLabel || 'REF'} </div>
+                        <div 
+                          className="absolute top-0 w-px h-full border-l-2 border-dashed border-indigo-400 pointer-events-none z-0 opacity-50 flex flex-col items-center"
+                          style={{ left: `calc(${((attr.referenceValue - 1) / (points - 1)) * 100}% + 0px)` }} 
+                        >
+                            <div className="bg-indigo-600 text-white text-[8px] px-1 rounded-sm -mt-2 uppercase font-black tracking-tighter shadow-sm whitespace-nowrap">
+                                {attr.referenceLabel || 'REF'}
+                            </div>
                         </div>
                     )}
                     {range.map(p => (
@@ -326,7 +280,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         ))}
       </div>
       <div className="mt-12 mb-32 flex justify-center">
-        <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white font-black rounded-3xl hover:bg-indigo-700 shadow-xl flex items-center gap-3 text-xl active:scale-95 group"> {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'} <ArrowRight size={28} className="group-hover:translate-x-2 transition-transform" /> </button>
+        <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white font-black rounded-3xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all flex items-center gap-3 text-xl active:scale-95 group"> {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'} <ArrowRight size={28} className="group-hover:translate-x-2 transition-transform" /> </button>
       </div>
     </div>
   )};
@@ -360,7 +314,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         })}
       </div>
       <div className="mt-12 mb-20 flex justify-center">
-        <button onClick={handleNextProduct} className="px-12 py-5 bg-pink-600 text-white font-black rounded-3xl hover:bg-pink-700 shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
+        <button onClick={handleNextProduct} className="px-12 py-5 bg-pink-600 text-white font-black rounded-3xl hover:bg-pink-700 shadow-xl shadow-pink-100 transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
       </div>
     </div>
   )};
@@ -387,7 +341,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         })}
       </div>
       <div className="mt-12 mb-20 flex justify-center">
-        <button onClick={handleNextProduct} className="px-12 py-5 bg-emerald-600 text-white font-black rounded-3xl hover:bg-emerald-700 shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
+        <button onClick={handleNextProduct} className="px-12 py-5 bg-emerald-600 text-white font-black rounded-3xl hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
       </div>
     </div>
   )};
@@ -430,7 +384,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           })}
         </div>
         <div className="mt-12 mb-20 flex justify-center">
-          <button onClick={handleNextProduct} className="px-12 py-5 bg-teal-600 text-white font-black rounded-3xl hover:bg-teal-700 shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
+          <button onClick={handleNextProduct} className="px-12 py-5 bg-teal-600 text-white font-black rounded-3xl hover:bg-teal-700 shadow-xl shadow-teal-100 transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
         </div>
       </div>
   )};
@@ -460,13 +414,13 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               {test.config.attributes.map(attr => (
                 <button key={attr.id} onClick={() => handleDominantClick(attr.id)} className={`p-8 rounded-2xl font-bold text-xl transition-all shadow-sm active:scale-95 ${currentDominant === attr.id ? 'bg-orange-600 text-white scale-105 shadow-xl ring-4 ring-orange-200' : 'bg-white text-slate-700 border-2 border-slate-100 hover:border-orange-200'}`}> {attr.name} </button>
               ))}
-              <button onClick={() => { stopTimer(); handleNextProduct(); }} className="col-span-full mt-8 py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase transition-all"> <Square size={24} fill="currentColor" /> STOP & Prossimo </button>
+              <button onClick={() => { stopTimer(); handleNextProduct(); }} className="col-span-full mt-8 py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase tracking-widest transition-all"> <Square size={24} fill="currentColor" /> STOP & Prossimo </button>
             </div>
           )}
            {!isTimerRunning && elapsedTime > 0 && (
              <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm"> 
                 <p className="text-slate-400 font-bold uppercase tracking-widest mb-6">Valutazione Completata</p> 
-                <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black shadow-xl transition-all text-xl"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Concludi Sessione'} </button> 
+                <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black shadow-xl shadow-indigo-100 transition-all text-xl"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Concludi Sessione'} </button> 
              </div>
            )}
       </div>
@@ -517,7 +471,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                     </div>
                     <div className="w-24 flex flex-col justify-end items-center pb-4"> <span className="text-6xl font-black tabular-nums tracking-tighter" style={{color: getColor(currentIntensity)}}>{currentIntensity}</span> <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Intensità</span> </div>
                 </div>
-                <button onClick={() => { stopTimer(); handleNextProduct(); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase transition-all"> <Square size={24} fill="currentColor" /> STOP </button>
+                <button onClick={() => { stopTimer(); handleNextProduct(); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase tracking-widest"> <Square size={24} fill="currentColor" /> STOP </button>
             </div>
           ) : (
              <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm"> 
@@ -564,32 +518,37 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       </div>
   );
 
-  const renderSorting = () => (
-    <div className="max-w-4xl mx-auto w-full">
-        <div className="text-center mb-10">
-            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-4"> <Layers size={32} /> </div>
-            <h3 className="text-3xl font-black text-slate-900">Sorting</h3>
-            <p className="text-slate-500 font-medium">Assegna lo stesso nome ai campioni simili.</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {products.map(p => (
-                <div key={p.code} className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6 group transition-all">
-                    <div className="flex items-center gap-4">
-                        <div className="w-20 h-20 bg-slate-900 text-white rounded-[24px] flex items-center justify-center text-4xl font-black font-mono shadow-lg group-hover:scale-110 transition-transform"> {p.code} </div>
-                        <div className="flex-1"> <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Campione</span> <p className="font-bold text-slate-800">{p.name || 'Prodotto'}</p> </div>
+  const renderSorting = () => {
+    return (
+        <div className="max-w-4xl mx-auto w-full">
+            <div className="text-center mb-10">
+                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-4"> <Layers size={32} /> </div>
+                <h3 className="text-3xl font-black text-slate-900">Sorting</h3>
+                <p className="text-slate-500 font-medium">Assegna lo stesso nome ai campioni simili.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {products.map(p => (
+                    <div key={p.code} className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6 group transition-all">
+                        <div className="flex items-center gap-4">
+                            <div className="w-20 h-20 bg-slate-900 text-white rounded-[24px] flex items-center justify-center text-4xl font-black font-mono shadow-lg group-hover:scale-110 transition-transform"> {p.code} </div>
+                            <div className="flex-1">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Campione</span>
+                                <p className="font-bold text-slate-800">{p.name || 'Prodotto'}</p>
+                            </div>
+                        </div>
+                        <div className="relative">
+                            <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2 ml-1">Gruppo</label>
+                            <input type="text" value={result.sortingGroups?.[p.code] || ''} onChange={(e) => handleSortChange(p.code, e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 focus:bg-white outline-none font-bold text-slate-800 transition-all" placeholder="Es: Dolce..." />
+                        </div>
                     </div>
-                    <div className="relative">
-                        <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2 ml-1">Gruppo</label>
-                        <input type="text" value={result.sortingGroups?.[p.code] || ''} onChange={(e) => handleSortChange(p.code, e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 focus:bg-white outline-none font-bold text-slate-800 transition-all" placeholder="Es: Dolce..." />
-                    </div>
-                </div>
-            ))}
+                ))}
+            </div>
+            <div className="mt-16 flex justify-center">
+                <button onClick={submitAll} className="px-16 py-6 bg-slate-900 text-white rounded-[32px] font-black shadow-2xl active:scale-95 transition-all text-xl uppercase tracking-widest"> INVIA </button>
+            </div>
         </div>
-        <div className="mt-16 flex justify-center">
-            <button onClick={submitAll} className="px-16 py-6 bg-slate-900 text-white rounded-[32px] font-black shadow-2xl active:scale-95 transition-all text-xl uppercase"> INVIA </button>
-        </div>
-    </div>
-  );
+    );
+  };
 
   const renderFlashProfile = () => {
       if (!currentProduct) return null;
@@ -601,7 +560,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           </div>
           <div className="mb-8 flex gap-3">
               <input value={newAttribute} onChange={e => setNewAttribute(e.target.value)} placeholder="Scrivi un attributo..." className="flex-1 p-4 border-2 border-slate-200 rounded-xl shadow-sm focus:border-fuchsia-500 outline-none font-medium transition-all" onKeyDown={e => { if(e.key === 'Enter' && newAttribute) { if (!customAttributes.includes(newAttribute)) { setCustomAttributes([...customAttributes, newAttribute]); } setNewAttribute(''); } }} />
-              <button onClick={() => { if(newAttribute && !customAttributes.includes(newAttribute)) { setCustomAttributes([...customAttributes, newAttribute]); setNewAttribute(''); } }} className="px-6 py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95"> + </button>
+              <button onClick={() => { if(newAttribute && !customAttributes.includes(newAttribute)) { setCustomAttributes([...customAttributes, newAttribute]); setNewAttribute(''); } }} className="px-6 py-4 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-transform"> + </button>
           </div>
           <div className="space-y-6 mb-12">
               {customAttributes.map(attr => (
@@ -612,7 +571,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               ))}
           </div>
           <div className="flex justify-center">
-            <button onClick={handleNextProduct} className="px-12 py-5 bg-fuchsia-600 text-white rounded-2xl hover:bg-fuchsia-700 font-black shadow-xl flex items-center gap-3 text-xl active:scale-95 uppercase tracking-widest"> {currentProductIndex < products.length - 1 ? 'Prossimo' : 'Concludi'} <ArrowRight size={24} /> </button>
+            <button onClick={handleNextProduct} className="px-12 py-5 bg-fuchsia-600 text-white rounded-2xl hover:bg-fuchsia-700 font-black shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95 uppercase tracking-widest"> {currentProductIndex < products.length - 1 ? 'Prossimo' : 'Concludi'} <ArrowRight size={24} /> </button>
           </div>
       </div>
   )};
