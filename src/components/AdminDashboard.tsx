@@ -185,7 +185,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
       const commonHeaders = { Giudice: res.judgeName, Data_Invio: res.submittedAt, Test: test.name, Metodo: test.type };
       if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
         const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
-        data.push({ ...commonHeaders, Scelta_Giudice: selection || '-', Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-' });
+        const baseRow = { ...commonHeaders, Scelta_Giudice: selection || '-', Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-' };
+        
+        // Aggiungi dati del triangleResponse se disponibili
+        if (test.type === TestType.TRIANGLE && res.triangleResponse) {
+          data.push({
+            ...baseRow,
+            Tipo_Sentore: res.triangleResponse.sensoryCategoryType || '-',
+            Descrizione_Differenza: res.triangleResponse.description || '-',
+            Intensita: res.triangleResponse.intensity || 0,
+            Risposta_Forzata: res.triangleResponse.isForcedResponse ? 'Sì' : 'No'
+          });
+        } else {
+          data.push(baseRow);
+        }
       } else if (test.type === TestType.NAPPING) {
         Object.entries(res.nappingData || {}).forEach(([code, coords]) => { const c = coords as { x: number; y: number }; data.push({ ...commonHeaders, Codice_Campione: code, Coordinata_X: c.x.toFixed(2), Coordinata_Y: c.y.toFixed(2) }); });
       } else if (test.type === TestType.SORTING) {

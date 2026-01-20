@@ -251,15 +251,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             <div className="flex items-center gap-6">
               <input
                 type="range"
-                min="1"
-                max="10"
+                min="0"
+                max="4"
                 value={triangleResponse.intensity}
                 onChange={e => setTriangleResponse(prev => ({ ...prev, intensity: parseInt(e.target.value) }))}
                 className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
               />
               <div className="text-center">
                 <span className="text-3xl font-black text-indigo-600">{triangleResponse.intensity}</span>
-                <p className="text-xs text-slate-500">/ 10</p>
+                <p className="text-xs text-slate-500">/ 4</p>
               </div>
             </div>
             <div className="flex justify-between text-xs text-slate-500 mt-2">
