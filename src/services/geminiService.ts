@@ -16,7 +16,7 @@ export const suggestAttributes = async (productDescription: string): Promise<str
   
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-pro',
       contents: `Act as a sensory scientist. Generate a list of 10 sensory attributes (Appearance, Aroma, Taste, Texture) suitable for a QDA or CATA analysis of the following product: "${productDescription}". Return ONLY the list of attributes as a JSON array of strings.`,
       config: {
         responseMimeType: 'application/json',
@@ -40,7 +40,7 @@ export const analyzeResults = async (testName: string, testType: string, summary
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-1.5-pro',
       contents: `Agisci come un esperto Panel Leader di analisi sensoriale. Analizza i seguenti dati aggregati per il test "${testName}" (Tipo: ${testType}). 
       
       Sintesi Dati:
