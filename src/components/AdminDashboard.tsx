@@ -200,7 +200,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
       } else if (test.type === TestType.TDS) {
         const tdsStartTime = res.tdsStartTime ? new Date(res.tdsStartTime).toLocaleTimeString('it-IT') : '-';
         const tdsEndTime = res.tdsEndTime ? new Date(res.tdsEndTime).toLocaleTimeString('it-IT') : '-';
-        const getAttributeName = (attrId: string) => test.config.attributes.find(a => a.id === attrId)?.name || attrId;
+        const getAttributeName = (attrId: string) => {
+          if (attrId === 'START') return 'START (Inizio Campione)';
+          if (attrId === 'END') return 'END (Fine Campione)';
+          return test.config.attributes.find(a => a.id === attrId)?.name || attrId;
+        };
         Object.entries(res.tdsLogs || {}).forEach(([prodCode, logs]) => {
           const logEntries = logs as any[];
           logEntries.forEach((log: any, idx: number) => {

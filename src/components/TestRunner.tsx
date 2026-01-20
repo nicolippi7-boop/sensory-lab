@@ -96,6 +96,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
 
   const handleNextProduct = () => {
     if (currentProductIndex < products.length - 1) {
+      if (test.type === TestType.TDS && currentProduct && isTimerRunning) {
+        const logKey = currentProduct.code;
+        const currentLogs = result.tdsLogs?.[logKey] || [];
+        const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+        setResult(prev => ({
+          ...prev,
+          tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] }
+        }));
+      }
       setCurrentProductIndex(prev => prev + 1);
       setSelectedOne(null);
       setIsTimerRunning(false);
@@ -106,6 +115,16 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       if (timerRef.current) clearInterval(timerRef.current);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
+      if (test.type === TestType.TDS && currentProduct && isTimerRunning) {
+        const logKey = currentProduct.code;
+        const currentLogs = result.tdsLogs?.[logKey] || [];
+        const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+        setResult(prev => ({
+          ...prev,
+          tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] },
+          tdsEndTime: new Date().toISOString()
+        }));
+      }
       submitAll();
     }
   };
@@ -152,8 +171,17 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const startTimer = () => {
     setIsTimerRunning(true);
     setElapsedTime(0);
-    if (test.type === TestType.TDS) {
-      setResult(prev => ({ ...prev, tdsStartTime: new Date().toISOString() }));
+    if (test.type === TestType.TDS && currentProduct) {
+      setResult(prev => {
+        const logKey = currentProduct.code;
+        const currentLogs = prev.tdsLogs?.[logKey] || [];
+        const startEntry: TDSLogEntry = { time: 0, attributeId: 'START' };
+        return {
+          ...prev,
+          tdsStartTime: new Date().toISOString(),
+          tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, startEntry] }
+        };
+      });
     }
     timerRef.current = window.setInterval(() => { setElapsedTime(prev => prev + 0.5); }, 500);
   };
@@ -161,8 +189,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setIsTimerRunning(false);
-    if (test.type === TestType.TDS) {
-      setResult(prev => ({ ...prev, tdsEndTime: new Date().toISOString() }));
+    if (test.type === TestType.TDS && currentProduct) {
+      const logKey = currentProduct.code;
+      const currentLogs = result.tdsLogs?.[logKey] || [];
+      const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+      setResult(prev => ({
+        ...prev,
+        tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] },
+        tdsEndTime: new Date().toISOString()
+      }));
     }
   };
 
