@@ -96,19 +96,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
 
   const handleNextProduct = () => {
     if (currentProductIndex < products.length - 1) {
-      if (test.type === TestType.TDS && currentProduct && elapsedTime > 0) {
-        const logKey = currentProduct.code;
-        const currentLogs = result.tdsLogs?.[logKey] || [];
-        // Controlla se c'è già un END, se no lo aggiunge
-        const hasEnd = currentLogs.some((log: any) => log.attributeId === 'END');
-        if (!hasEnd) {
-          const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
-          setResult(prev => ({
-            ...prev,
-            tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] }
-          }));
-        }
-      }
       setCurrentProductIndex(prev => prev + 1);
       setSelectedOne(null);
       setIsTimerRunning(false);
@@ -119,20 +106,37 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       if (timerRef.current) clearInterval(timerRef.current);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      if (test.type === TestType.TDS && currentProduct && elapsedTime > 0) {
-        const logKey = currentProduct.code;
-        const currentLogs = result.tdsLogs?.[logKey] || [];
-        // Controlla se c'è già un END, se no lo aggiunge
-        const hasEnd = currentLogs.some((log: any) => log.attributeId === 'END');
-        if (!hasEnd) {
-          const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
-          setResult(prev => ({
-            ...prev,
-            tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] },
-            tdsEndTime: new Date().toISOString()
-          }));
-        }
+      // Per l'ultimo campione, assicuriamo che END sia registrato
+      finalizeTDSAndSubmit();
+    }
+  };
+
+  const finalizeTDSAndSubmit = () => {
+    if (test.type === TestType.TDS && currentProduct) {
+      const logKey = currentProduct.code;
+      const currentLogs = result.tdsLogs?.[logKey] || [];
+      const hasEnd = currentLogs.some((log: any) => log.attributeId === 'END');
+      
+      if (!hasEnd && elapsedTime > 0) {
+        const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+        const updatedResult: Partial<JudgeResult> = {
+          ...result,
+          tdsLogs: { ...result.tdsLogs, [logKey]: [...currentLogs, endEntry] },
+          tdsEndTime: new Date().toISOString()
+        };
+        
+        const finalResult: JudgeResult = {
+          ...updatedResult as JudgeResult,
+          id: generateId(),
+          submittedAt: new Date().toISOString(),
+          triangleSelection: selectedOne || undefined,
+          triangleResponse: test.type === TestType.TRIANGLE ? triangleResponse : undefined
+        };
+        onComplete(finalResult);
+      } else {
+        submitAll();
       }
+    } else {
       submitAll();
     }
   };
@@ -200,10 +204,24 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     if (test.type === TestType.TDS && currentProduct) {
       const logKey = currentProduct.code;
       const currentLogs = result.tdsLogs?.[logKey] || [];
-      const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+      const hasStart = currentLogs.some((log: any) => log.attributeId === 'START');
+      const hasEnd = currentLogs.some((log: any) => log.attributeId === 'END');
+      
+      let updatedLogs = [...currentLogs];
+      
+      if (!hasStart) {
+        const startEntry: TDSLogEntry = { time: 0, attributeId: 'START' };
+        updatedLogs.unshift(startEntry);
+      }
+      
+      if (!hasEnd) {
+        const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+        updatedLogs.push(endEntry);
+      }
+      
       setResult(prev => ({
         ...prev,
-        tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] },
+        tdsLogs: { ...prev.tdsLogs, [logKey]: updatedLogs },
         tdsEndTime: new Date().toISOString()
       }));
     }
