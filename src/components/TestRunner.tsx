@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
-import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute } from '../types';
+import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute, TriangleResponse } from '../types';
 import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
@@ -38,6 +38,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   });
 
   const [selectedOne, setSelectedOne] = useState<string | null>(null);
+  const [triangleStep, setTriangleStep] = useState<'selection' | 'details'>('selection');
+  const [triangleResponse, setTriangleResponse] = useState<TriangleResponse>({
+    selectedCode: '',
+    sensoryCategoryType: 'aroma',
+    description: '',
+    intensity: 5,
+    isForcedResponse: false
+  });
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentDominant, setCurrentDominant] = useState<string | null>(null);
@@ -106,7 +114,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         ...result as JudgeResult,
         id: generateId(),
         submittedAt: new Date().toISOString(),
-        selection: selectedOne || undefined
+        triangleSelection: selectedOne || undefined,
+        triangleResponse: test.type === TestType.TRIANGLE ? triangleResponse : undefined
     };
     
     // Non facciamo più la chiamata supabase.from('results').insert qui!
@@ -174,23 +183,145 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       setResult(prev => ({ ...prev, sortingGroups: { ...prev.sortingGroups, [prodCode]: group } }));
   };
 
-  const renderTriangle = () => (
-    <div className="flex flex-col items-center justify-center space-y-12">
-      <div className="text-center">
-          <h3 className="text-2xl font-bold text-slate-800 mb-2">Test Triangolare</h3>
-          <p className="text-slate-500">Seleziona il campione <span className="font-bold text-indigo-600">DIVERSO</span> dagli altri due.</p>
+  const renderTriangle = () => {
+    if (triangleStep === 'selection') {
+      return (
+        <div className="flex flex-col items-center justify-center space-y-12">
+          <div className="text-center">
+            <h3 className="text-2xl font-bold text-slate-800 mb-2">Test Triangolare</h3>
+            <p className="text-slate-500">Seleziona il campione <span className="font-bold text-indigo-600">DIVERSO</span> dagli altri due.</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-8">
+            {products.map(p => (
+              <button key={p.code} onClick={() => {
+                setSelectedOne(p.code);
+                setTriangleResponse(prev => ({ ...prev, selectedCode: p.code }));
+              }} className={`w-40 h-40 rounded-full border-4 flex items-center justify-center text-3xl font-black font-mono transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-600 text-white scale-110 shadow-xl' : 'border-slate-200 hover:border-indigo-300 bg-white text-slate-700'}`}> {p.code} </button>
+            ))}
+          </div>
+          <button disabled={!selectedOne} onClick={() => setTriangleStep('details')} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Continua </button>
+        </div>
+      );
+    }
+
+    // Step 2: Details
+    return (
+      <div className="flex flex-col items-center justify-center space-y-8 max-w-2xl">
+        <div className="text-center">
+          <h3 className="text-2xl font-bold text-slate-800 mb-2">Dettagli della Differenza</h3>
+          <p className="text-slate-500">Descrivere la differenza percepita nel campione <span className="font-bold text-indigo-600">{selectedOne}</span></p>
+        </div>
+
+        <div className="w-full bg-white rounded-2xl p-8 shadow-sm border border-slate-200 space-y-6">
+          {/* Sensory Category */}
+          <div className="space-y-3">
+            <label className="block text-sm font-semibold text-slate-700">Tipo di Sentore *</label>
+            <div className="flex gap-4">
+              {(['aroma', 'taste'] as const).map(type => (
+                <button
+                  key={type}
+                  onClick={() => setTriangleResponse(prev => ({ ...prev, sensoryCategoryType: type }))}
+                  className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all border-2 ${
+                    triangleResponse.sensoryCategoryType === type
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300'
+                  }`}
+                >
+                  {type === 'aroma' ? '👃 Odore/Aroma' : '👅 Sapore'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-3">
+            <label className="block text-sm font-semibold text-slate-700">Descrizione della Differenza *</label>
+            <textarea
+              value={triangleResponse.description}
+              onChange={e => setTriangleResponse(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Es: Note fruttate, amaro pronunciato, profumo intenso..."
+              className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none"
+              rows={3}
+            />
+          </div>
+
+          {/* Intensity Scale */}
+          <div className="space-y-3">
+            <label className="block text-sm font-semibold text-slate-700">Intensità del Sentore *</label>
+            <div className="flex items-center gap-6">
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={triangleResponse.intensity}
+                onChange={e => setTriangleResponse(prev => ({ ...prev, intensity: parseInt(e.target.value) }))}
+                className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              <div className="text-center">
+                <span className="text-3xl font-black text-indigo-600">{triangleResponse.intensity}</span>
+                <p className="text-xs text-slate-500">/ 10</p>
+              </div>
+            </div>
+            <div className="flex justify-between text-xs text-slate-500 mt-2">
+              <span>Molto Debole</span>
+              <span>Molto Forte</span>
+            </div>
+          </div>
+
+          {/* Forced Response Question (DIN 10955) */}
+          <div className="space-y-3 pt-4 border-t border-slate-200">
+            <label className="block text-sm font-semibold text-slate-700">Risposta Forzata? (DIN 10955)</label>
+            <p className="text-xs text-slate-500 mb-3">La tua scelta è stata basata su una reale percezione di differenza o è stata una risposta casuale?</p>
+            <div className="flex gap-4">
+              {[
+                { value: false, label: '✓ Percezione Reale', desc: 'Ho percepito chiaramente una differenza' },
+                { value: true, label: '? Risposta Forzata', desc: 'Non ero sicuro, ho indovinato' }
+              ].map(option => (
+                <button
+                  key={String(option.value)}
+                  onClick={() => setTriangleResponse(prev => ({ ...prev, isForcedResponse: option.value }))}
+                  className={`flex-1 p-4 rounded-xl border-2 transition-all text-left ${
+                    triangleResponse.isForcedResponse === option.value
+                      ? 'border-indigo-600 bg-indigo-50'
+                      : 'border-slate-200 bg-white hover:border-indigo-300'
+                  }`}
+                >
+                  <div className="font-semibold text-slate-800">{option.label}</div>
+                  <div className="text-xs text-slate-500 mt-1">{option.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-4 pt-6">
+            <button
+              onClick={() => setTriangleStep('selection')}
+              className="flex-1 px-6 py-3 border-2 border-slate-300 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-all"
+            >
+              Indietro
+            </button>
+            <button
+              disabled={!triangleResponse.description || triangleResponse.description.trim().length === 0}
+              onClick={() => {
+                const final = {
+                  ...result as JudgeResult,
+                  id: generateId(),
+                  submittedAt: new Date().toISOString(),
+                  triangleSelection: selectedOne || '',
+                  triangleResponse
+                };
+                onComplete(final);
+              }}
+              className="flex-1 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+            >
+              Conferma e Invia
+            </button>
+          </div>
+        </div>
       </div>
-      <div className="flex flex-wrap justify-center gap-8">
-        {products.map(p => (
-          <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`w-40 h-40 rounded-full border-4 flex items-center justify-center text-3xl font-black font-mono transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-600 text-white scale-110 shadow-xl' : 'border-slate-200 hover:border-indigo-300 bg-white text-slate-700'}`}> {p.code} </button>
-        ))}
-      </div>
-      <button disabled={!selectedOne} onClick={() => {
-          const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), triangleSelection: selectedOne || '' };
-          onComplete(final);
-      }} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
-    </div>
-  );
+    );
+  };
 
   const renderPairedComparison = () => (
     <div className="flex flex-col items-center justify-center space-y-12">

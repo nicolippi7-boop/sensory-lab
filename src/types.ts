@@ -60,12 +60,21 @@ export interface TILogEntry {
   intensity: number;
 }
 
+export interface TriangleResponse {
+  selectedCode: string;
+  sensoryCategoryType: 'aroma' | 'taste';
+  description: string;
+  intensity: number;
+  isForcedResponse: boolean;
+}
+
 export interface JudgeResult {
   id: string;
   testId: string;
   judgeName: string;
   submittedAt: string;
-  triangleSelection?: string; 
+  triangleSelection?: string;
+  triangleResponse?: TriangleResponse;
   pairedSelection?: string; 
   qdaRatings?: Record<string, number>;
   flashAttributes?: string[];
