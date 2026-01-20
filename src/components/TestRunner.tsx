@@ -345,6 +345,26 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     if (!currentProduct) return null;
     const scaleType = attr.scaleType || 'linear';
     const val = (result.qdaRatings || {})[`${currentProduct.code}_${attr.id}`] || 0;
+    if (scaleType === 'linear9') {
+        return (
+            <div className="space-y-6">
+                <div className="relative h-12 flex items-center mt-12">
+                    {attr.referenceValue !== undefined && (
+                        <div className="absolute z-20 flex flex-col items-center pointer-events-none" style={{ left: `${((attr.referenceValue - 1) / 8) * 100}%`, transform: 'translateX(-50%)', top: '-42px' }}>
+                            <div className="bg-indigo-600 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-lg mb-1 whitespace-nowrap uppercase border border-indigo-400 flex items-center gap-1"> <Target size={10} /> {attr.referenceLabel || 'RIF'}: {attr.referenceValue.toFixed(1)} </div>
+                            <div className="w-1 h-10 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(79,70,229,0.4)]" />
+                        </div>
+                    )}
+                    <input type="range" min="1" max="9" step="0.1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
+                </div>
+                <div className="flex justify-between px-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.leftAnchor || 'Debole'}</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.rightAnchor || 'Forte'}</span>
+                </div>
+                <div className="text-center text-lg font-black text-indigo-600">{val.toFixed(1)}</div>
+            </div>
+        );
+    }
     if (scaleType === 'likert9' || scaleType === 'likert7' || scaleType === 'likert5') {
         const points = scaleType === 'likert9' ? 9 : scaleType === 'likert7' ? 7 : 5;
         const range = Array.from({length: points}, (_, i) => i + 1);

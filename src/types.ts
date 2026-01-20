@@ -19,7 +19,7 @@ export interface Attribute {
   name: string;
   description?: string;
   category?: 'appearance' | 'aroma' | 'taste' | 'texture';
-  scaleType: 'linear' | 'linear10' | 'likert5' | 'likert7' | 'likert9';
+  scaleType: 'linear' | 'linear9' | 'linear10' | 'likert5' | 'likert7' | 'likert9';
   leftAnchor?: string;
   rightAnchor?: string;
   referenceValue?: number; 
