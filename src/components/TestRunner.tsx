@@ -96,14 +96,18 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
 
   const handleNextProduct = () => {
     if (currentProductIndex < products.length - 1) {
-      if (test.type === TestType.TDS && currentProduct && isTimerRunning) {
+      if (test.type === TestType.TDS && currentProduct && elapsedTime > 0) {
         const logKey = currentProduct.code;
         const currentLogs = result.tdsLogs?.[logKey] || [];
-        const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
-        setResult(prev => ({
-          ...prev,
-          tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] }
-        }));
+        // Controlla se c'è già un END, se no lo aggiunge
+        const hasEnd = currentLogs.some((log: any) => log.attributeId === 'END');
+        if (!hasEnd) {
+          const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+          setResult(prev => ({
+            ...prev,
+            tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] }
+          }));
+        }
       }
       setCurrentProductIndex(prev => prev + 1);
       setSelectedOne(null);
@@ -115,15 +119,19 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       if (timerRef.current) clearInterval(timerRef.current);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      if (test.type === TestType.TDS && currentProduct && isTimerRunning) {
+      if (test.type === TestType.TDS && currentProduct && elapsedTime > 0) {
         const logKey = currentProduct.code;
         const currentLogs = result.tdsLogs?.[logKey] || [];
-        const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
-        setResult(prev => ({
-          ...prev,
-          tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] },
-          tdsEndTime: new Date().toISOString()
-        }));
+        // Controlla se c'è già un END, se no lo aggiunge
+        const hasEnd = currentLogs.some((log: any) => log.attributeId === 'END');
+        if (!hasEnd) {
+          const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
+          setResult(prev => ({
+            ...prev,
+            tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, endEntry] },
+            tdsEndTime: new Date().toISOString()
+          }));
+        }
       }
       submitAll();
     }
