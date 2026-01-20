@@ -186,19 +186,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
       if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
         const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
         const baseRow = { ...commonHeaders, Scelta_Giudice: selection || '-', Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-' };
-        
-        // Aggiungi dati del triangleResponse se disponibili
         if (test.type === TestType.TRIANGLE && res.triangleResponse) {
           data.push({
             ...baseRow,
             Tipo_Sentore: res.triangleResponse.sensoryCategoryType || '-',
             Descrizione_Differenza: res.triangleResponse.description || '-',
             Intensita: res.triangleResponse.intensity || 0,
-            Risposta_Forzata: res.triangleResponse.isForcedResponse ? 'Sì' : 'No'
+            Risposta_Forzata: res.triangleResponse.isForcedResponse ? 'Si' : 'No'
           });
         } else {
           data.push(baseRow);
         }
+      } else if (test.type === TestType.TDS) {
+        const tdsStartTime = res.tdsStartTime ? new Date(res.tdsStartTime).toLocaleTimeString('it-IT') : '-';
+        const tdsEndTime = res.tdsEndTime ? new Date(res.tdsEndTime).toLocaleTimeString('it-IT') : '-';
+        const getAttributeName = (attrId: string) => test.config.attributes.find(a => a.id === attrId)?.name || attrId;
+        Object.entries(res.tdsLogs || {}).forEach(([prodCode, logs]) => {
+          const logEntries = logs as any[];
+          logEntries.forEach((log: any, idx: number) => {
+            data.push({
+              ...commonHeaders,
+              Campione: prodCode,
+              Tempo_Inizio_Test: tdsStartTime,
+              Tempo_Fine_Test: tdsEndTime,
+              Sequenza: idx + 1,
+              Tempo_Registrazione: log.time ? log.time.toFixed(1) + ' s' : '-',
+              Attributo_Dominante: getAttributeName(log.attributeId) || '-'
+            });
+          });
+        });
       } else if (test.type === TestType.NAPPING) {
         Object.entries(res.nappingData || {}).forEach(([code, coords]) => { const c = coords as { x: number; y: number }; data.push({ ...commonHeaders, Codice_Campione: code, Coordinata_X: c.x.toFixed(2), Coordinata_Y: c.y.toFixed(2) }); });
       } else if (test.type === TestType.SORTING) {

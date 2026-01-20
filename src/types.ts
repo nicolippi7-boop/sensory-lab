@@ -82,7 +82,9 @@ export interface JudgeResult {
   rataSelection?: Record<string, number>;
   nappingData?: Record<string, { x: number, y: number }>;
   sortingGroups?: Record<string, string>;
-  tdsLogs?: Record<string, TDSLogEntry[]>; 
+  tdsLogs?: Record<string, TDSLogEntry[]>;
+  tdsStartTime?: string;
+  tdsEndTime?: string;
   tiLogs?: Record<string, TILogEntry[]>;
 }
 

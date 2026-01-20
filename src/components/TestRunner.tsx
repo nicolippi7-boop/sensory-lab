@@ -35,6 +35,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     tiLogs: {},
     nappingData: {},
     sortingGroups: {},
+    tdsStartTime: undefined,
+    tdsEndTime: undefined,
   });
 
   const [selectedOne, setSelectedOne] = useState<string | null>(null);
@@ -150,12 +152,18 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const startTimer = () => {
     setIsTimerRunning(true);
     setElapsedTime(0);
+    if (test.type === TestType.TDS) {
+      setResult(prev => ({ ...prev, tdsStartTime: new Date().toISOString() }));
+    }
     timerRef.current = window.setInterval(() => { setElapsedTime(prev => prev + 0.5); }, 500);
   };
 
   const stopTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setIsTimerRunning(false);
+    if (test.type === TestType.TDS) {
+      setResult(prev => ({ ...prev, tdsEndTime: new Date().toISOString() }));
+    }
   };
 
   const handleDominantClick = (attrId: string) => {
