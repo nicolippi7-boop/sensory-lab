@@ -287,6 +287,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
     return max || 100;
   };
 
+  const getProductColor = (index: number): string => {
+    const colors = [
+      '#4f46e5', // Indigo vivido
+      '#10b981', // Verde smeraldo
+      '#f59e0b', // Ambra
+      '#ec4899', // Rosa vivido
+      '#8b5cf6', // Viola
+      '#06b6d4', // Ciano
+      '#d97706', // Arancio scuro
+      '#7c3aed', // Viola profondo
+      '#0891b2', // Blu-verde
+      '#c2410c', // Arancio scuro
+      '#be123c', // Rosso
+      '#059669', // Verde scuro
+    ];
+    return colors[index % colors.length];
+  };
+
   const handleDuplicateTest = (test: SensoryTest) => {
     const newTest: SensoryTest = JSON.parse(JSON.stringify(test));
     newTest.id = generateId();
@@ -510,7 +528,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                                       <PolarAngleAxis dataKey="attribute" tick={{fill: '#64748b', fontSize: 12, fontWeight: 'bold'}} />
                                       <PolarRadiusAxis domain={[0, getMaxScale(selectedTest)]} />
                                     {selectedTest.config.products.map((p, idx) => (
-                                        <Radar key={p.id} name={`${p.name} (${p.code})`} dataKey={p.name} stroke={idx === 0 ? "#4f46e5" : idx === 1 ? "#10b981" : "#f59e0b"} fill={idx === 0 ? "#4f46e5" : idx === 1 ? "#10b981" : "#f59e0b"} fillOpacity={0.2} strokeWidth={3} />
+                                        <Radar key={p.id} name={`${p.name} (${p.code})`} dataKey={p.name} stroke={getProductColor(idx)} fill={getProductColor(idx)} fillOpacity={0.2} strokeWidth={3} />
                                     ))}
                                     <Radar name="Target Riferimento" dataKey="Riferimento" stroke="#ef4444" strokeDasharray="5 5" fill="none" strokeWidth={2} />
                                     <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}} />
