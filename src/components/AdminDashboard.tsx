@@ -512,7 +512,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                                     {selectedTest.config.products.map((p, idx) => (
                                         <Radar key={p.id} name={`${p.name} (${p.code})`} dataKey={p.name} stroke={idx === 0 ? "#4f46e5" : idx === 1 ? "#10b981" : "#f59e0b"} fill={idx === 0 ? "#4f46e5" : idx === 1 ? "#10b981" : "#f59e0b"} fillOpacity={0.2} strokeWidth={3} />
                                     ))}
-                                    <Radar name="Target Riferimento" dataKey="Riferimento" stroke="#94a3b8" strokeDasharray="5 5" fill="none" strokeWidth={2} />
+                                    <Radar name="Target Riferimento" dataKey="Riferimento" stroke="#ef4444" strokeDasharray="5 5" fill="none" strokeWidth={2} />
                                     <Tooltip contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}} />
                                     <Legend />
                                 </RadarChart>
