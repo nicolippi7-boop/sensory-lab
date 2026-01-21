@@ -16,10 +16,6 @@ input[type="range"] {
   vertical-align: middle;
   display: block;
   margin: 0.75rem 0;
-  padding: 0;
-  position: relative;
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 /* ============================================
@@ -38,6 +34,7 @@ input[type="range"]::-webkit-slider-thumb {
   border: 3px solid #fff;
   border-radius: 50%;
   cursor: pointer;
+  transform: translateY(-50%);
   
   /* Ombra e profondità */
   box-shadow: 
@@ -91,6 +88,7 @@ input[type="range"]::-moz-range-thumb {
   border: 3px solid #fff;
   border-radius: 50%;
   cursor: pointer;
+  transform: translateY(-50%);
   
   box-shadow: 
     0 4px 12px rgba(79, 70, 229, 0.3),
