@@ -34,6 +34,7 @@ export interface Product {
 
 export interface TestConfig {
   instructions: string;
+  notes?: string;
   products: Product[];
   attributes: Attribute[];
   randomizePresentation?: boolean;
