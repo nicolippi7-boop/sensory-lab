@@ -19,35 +19,6 @@ interface AdminDashboardProps {
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-const SlideToDelete = ({ onDelete }: { onDelete: () => void }) => {
-    const [value, setValue] = useState(0);
-    const [isDragging, setIsDragging] = useState(false);
-    const valueRef = useRef(0);
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = Number(e.target.value);
-      setValue(val);
-      valueRef.current = val;
-      setIsDragging(true);
-    };
-    const handleRelease = () => {
-      setIsDragging(false);
-      if (valueRef.current > 90) {
-        onDelete();
-        setTimeout(() => { setValue(0); valueRef.current = 0; }, 100);
-      } else { setValue(0); valueRef.current = 0; }
-    };
-    return (
-      <div className="relative w-36 h-9 bg-slate-100 rounded-full overflow-hidden flex items-center select-none group border border-slate-200 shadow-inner" onClick={(e) => e.stopPropagation()}>
-         <div className={`absolute left-0 top-0 bottom-0 bg-red-500 transition-all ease-out ${!isDragging ? 'duration-300' : 'duration-0'}`} style={{ width: `${value}%`, opacity: value > 5 ? 1 : 0 }} />
-         <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider text-slate-400 pointer-events-none mix-blend-hard-light">{value > 85 ? 'Rilascia!' : 'Elimina'}</div>
-         <div className="absolute top-1 bottom-1 w-7 bg-white rounded-full shadow-md flex items-center justify-center pointer-events-none transition-all ease-out" style={{ left: `calc(${value}% - ${value * 0.28}px + 4px)` }}>
-             <Trash2 size={14} className={value > 85 ? "text-red-600 animate-bounce" : "text-slate-400"} />
-         </div>
-         <input type="range" min="0" max="100" step="1" value={value} onChange={handleChange} onPointerUp={handleRelease} className="absolute inset-0 w-full h-full opacity-0 cursor-grab active:cursor-grabbing z-20" />
-      </div>
-    );
-};
-
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, onCreateTest, onUpdateTest, onDeleteTest, onNavigate, peerId }) => {
   const [view, setView] = useState<'LIST' | 'CREATE' | 'DETAIL'>('LIST');
   const [selectedTest, setSelectedTest] = useState<SensoryTest | null>(null);
@@ -507,8 +478,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                             <button onClick={() => handleResetResults(test)} className="p-3 text-amber-500 hover:bg-amber-50 rounded-2xl transition-all" title="Svuota Risposte"><RefreshCw size={22}/></button>
                             <button onClick={() => handleExportExcel(test)} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Download size={22}/></button>
                             <button onClick={() => handleDuplicateTest(test)} className="p-3 text-slate-400 hover:text-indigo-600 rounded-2xl transition-all" title="Duplica Test"><Copy size={20} /></button>
-                            <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all"><Pencil size={20}/></button>
-                            <SlideToDelete onDelete={() => onDeleteTest(test.id)} />
+                            <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all" title="Modifica"><Pencil size={20}/></button>
+                            <button 
+                                onClick={() => {
+                                    if (window.confirm(`Sei sicuro di voler eliminare definitivamente il test "${test.name}" e tutti i suoi ${results.filter(r => r.testId === test.id).length} risultati? L'azione è irreversibile.`)) {
+                                        onDeleteTest(test.id);
+                                    }
+                                }} 
+                                className="p-3 text-slate-300 hover:text-red-500 rounded-2xl transition-all" 
+                                title="Elimina Test"
+                            >
+                                <Trash2 size={20}/>
+                            </button>
                         </div>
                     </div>
                 ))}
