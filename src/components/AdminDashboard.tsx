@@ -445,6 +445,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                                   <input type="number" className="w-24 p-4 border-2 border-white rounded-2xl font-bold text-sm focus:border-indigo-500 transition-all" placeholder="Val." value={attrRefValue} onChange={e => setAttrRefValue(e.target.value)} />
                               </div>
                           </div>
+                          {(newTestType === TestType.QDA || newTestType === TestType.FLASH_PROFILE || newTestType === TestType.RATA || newTestType === TestType.TIME_INTENSITY) && (
                           <div className="col-span-2">
                               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Tipo Scala</label>
                               <select className="w-full p-4 border-2 border-white rounded-2xl bg-white font-bold outline-none focus:border-indigo-500 transition-all" value={attrScale} onChange={e => setAttrScale(e.target.value as any)}>
@@ -455,6 +456,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                                   <option value="likert9">9 pt (Edonica)</option>
                               </select>
                           </div>
+                          )}
                       </div>
                       <button onClick={handleAddAttribute} disabled={!attrName.trim()} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black hover:bg-slate-900 transition-all shadow-xl disabled:opacity-30"> AGGIUNGI ATTRIBUTO </button>
                   </div>
