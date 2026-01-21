@@ -135,7 +135,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       setIsTimerRunning(false);
       setElapsedTime(0);
       setCurrentDominant(null);
-      setCurrentIntensity(0);
+      setCurrentIntensity(1);
       setTiHistory([]);
       if (timerRef.current) clearInterval(timerRef.current);
       window.scrollTo({ top: 0, behavior: 'smooth' });
