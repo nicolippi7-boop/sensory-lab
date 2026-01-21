@@ -3,6 +3,7 @@ import type { SensoryTest, JudgeResult, ViewState } from './types';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TestRunner } from './components/TestRunner';
 import { ChefHat, RefreshCw } from 'lucide-react';
+import './styles/slider.css';
 // @ts-ignore
 import { Peer } from 'peerjs';
 import { supabase } from './components/supabaseClient';

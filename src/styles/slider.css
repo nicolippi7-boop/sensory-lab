@@ -1,0 +1,213 @@
+/* ============================================
+   CUSTOM RANGE SLIDER STYLES
+   Migliorato per desktop e tablet
+   ============================================ */
+
+/* Stile base per tutti gli slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(to right, #e2e8f0 0%, #e2e8f0 100%);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================================
+   WEBKIT (Chrome, Safari, Edge) - THUMB
+   ============================================ */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  
+  /* Dimensioni base */
+  width: 1.5rem;
+  height: 1.5rem;
+  
+  /* Stile thumb */
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  
+  /* Ombra e profondità */
+  box-shadow: 
+    0 4px 12px rgba(79, 70, 229, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  
+  /* Transizioni smooth */
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover state */
+input[type="range"]:hover::-webkit-slider-thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  box-shadow: 
+    0 6px 20px rgba(79, 70, 229, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+/* Active state */
+input[type="range"]:active::-webkit-slider-thumb {
+  width: 1.875rem;
+  height: 1.875rem;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  box-shadow: 
+    0 8px 24px rgba(79, 70, 229, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+/* Track */
+input[type="range"]::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, #e2e8f0 0%, #e2e8f0 100%);
+  height: 0.5rem;
+  border-radius: 9999px;
+  border: none;
+}
+
+/* ============================================
+   FIREFOX - THUMB
+   ============================================ */
+input[type="range"]::-moz-range-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  
+  box-shadow: 
+    0 4px 12px rgba(79, 70, 229, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    inset 0 1px 2px rgba(255, 255, 255, 0.3);
+  
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover state Firefox */
+input[type="range"]:hover::-moz-range-thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  box-shadow: 
+    0 6px 20px rgba(79, 70, 229, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+/* Active state Firefox */
+input[type="range"]:active::-moz-range-thumb {
+  width: 1.875rem;
+  height: 1.875rem;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  box-shadow: 
+    0 8px 24px rgba(79, 70, 229, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+/* Track Firefox */
+input[type="range"]::-moz-range-track {
+  background: linear-gradient(to right, #e2e8f0 0%, #e2e8f0 100%);
+  border-radius: 9999px;
+  border: none;
+}
+
+input[type="range"]::-moz-range-progress {
+  background: linear-gradient(to right, #e2e8f0 0%, #e2e8f0 100%);
+  border-radius: 9999px;
+}
+
+/* ============================================
+   ACCENT COLOR VARIANTS
+   ============================================ */
+
+/* Per slider con accent-indigo-600 */
+input[type="range"].accent-indigo-600::-webkit-slider-thumb,
+input[type="range"][style*="accent-indigo"]::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+}
+
+/* Per slider con accent-pink-600 */
+input[type="range"].accent-pink-600::-webkit-slider-thumb,
+input[type="range"][style*="accent-pink"]::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+}
+
+input[type="range"].accent-pink-600:hover::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #f43f5e 0%, #ec4899 100%);
+}
+
+/* Per slider con accent-fuchsia-600 */
+input[type="range"].accent-fuchsia-600::-webkit-slider-thumb,
+input[type="range"][style*="accent-fuchsia"]::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #d946ef 0%, #c026d3 100%);
+}
+
+input[type="range"].accent-fuchsia-600:hover::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #e879f9 0%, #d946ef 100%);
+}
+
+/* ============================================
+   TABLET OPTIMIZATIONS
+   ============================================ */
+@media (max-width: 1024px) {
+  input[type="range"]::-webkit-slider-thumb {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  input[type="range"]:hover::-webkit-slider-thumb {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  input[type="range"]:active::-webkit-slider-thumb {
+    width: 2.375rem;
+    height: 2.375rem;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  input[type="range"]:hover::-moz-range-thumb {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  input[type="range"]:active::-moz-range-thumb {
+    width: 2.375rem;
+    height: 2.375rem;
+  }
+}
+
+/* ============================================
+   SLIDER VERTICALE (Time Intensity)
+   ============================================ */
+input[type="range"][style*="writingMode"] {
+  writing-mode: bt-lr;
+  -webkit-appearance: slider-vertical;
+  width: 100%;
+  height: 100%;
+}
+
+input[type="range"][style*="writingMode"]::-webkit-slider-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+input[type="range"][style*="writingMode"]::-moz-range-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+}
