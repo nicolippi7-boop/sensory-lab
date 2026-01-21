@@ -51,16 +51,8 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [view]);
 
-  const getRandomizedTest = (test: SensoryTest) => {
-    if (!test || !test.config.products || !test.config.randomizePresentation) return test;
-    const randomizedTest = JSON.parse(JSON.stringify(test));
-    const products = randomizedTest.config.products;
-    for (let i = products.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [products[i], products[j]] = [products[j], products[i]];
-    }
-    return randomizedTest;
-  };
+  // La randomizzazione della presentazione viene gestita nel componente TestRunner
+  // per assicurare che ogni assaggiatore riceva un ordine indipendente.
 
   useEffect(() => {
     const peer = new Peer();
@@ -130,7 +122,7 @@ const App: React.FC = () => {
 
       {view === 'JUDGE_RUNNER' && activeTestId && (
         <TestRunner 
-          test={getRandomizedTest(tests.find(t => t.id === activeTestId)!)}
+          test={tests.find(t => t.id === activeTestId)!}
           judgeName={judgeName} onComplete={handleComplete}
           onExit={() => setView(new URLSearchParams(window.location.search).get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME')}
         />
