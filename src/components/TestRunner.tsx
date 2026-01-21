@@ -61,67 +61,50 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [newAttribute, setNewAttribute] = useState('');
 
   useEffect(() => {
-    if (!currentProduct) return;
-
-    if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
-        setResult(prev => {
-            const newQdaRatings = { ...prev.qdaRatings };
-            let isUpdated = false;
-
-            test.config.attributes.forEach(attr => {
-                const key = `${currentProduct.code}_${attr.id}`;
-                if (newQdaRatings[key] === undefined) {
-                    isUpdated = true;
-                    if (test.type === TestType.HEDONIC) {
-                        newQdaRatings[key] = 5;
-                    } else { // QDA
-                        const scaleType = attr.scaleType || 'linear';
-                        if (scaleType === 'linear9' || scaleType === 'linear10' || scaleType.startsWith('likert')) {
-                            newQdaRatings[key] = 1;
-                        } else {
-                            newQdaRatings[key] = 0;
-                        }
-                    }
-                }
-            });
-
-            if (isUpdated) {
-                return { ...prev, qdaRatings: newQdaRatings };
-            }
-            return prev;
-        });
-    } else if (test.type === TestType.FLASH_PROFILE) {
-        setResult(prev => {
-            const newQdaRatings = { ...prev.qdaRatings };
-            let isUpdated = false;
-
-            customAttributes.forEach(attr => {
-                const key = `${currentProduct.code}_${attr}`;
-                if (newQdaRatings[key] === undefined) {
-                    isUpdated = true;
-                    newQdaRatings[key] = 0; // Flash profile sliders are 0-10, default 0.
-                }
-            });
-
-            if (isUpdated) {
-                return { ...prev, qdaRatings: newQdaRatings };
-            }
-            return prev;
-        });
-    }
-}, [currentProduct, test.type, test.config.attributes, customAttributes]);
-
-  useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
-        if (test.config.randomizePresentation) {
-            setProducts(shuffleArray(test.config.products));
-        } else {
-            setProducts(test.config.products);
-        }
+        const initialProducts = test.config.randomizePresentation
+            ? shuffleArray(test.config.products)
+            : [...test.config.products];
+        setProducts(initialProducts);
         setCurrentProductIndex(0);
         prevTestIdRef.current = test.id;
+
+        // Reset state and pre-fill ratings to prevent saving 0 for untouched sliders
+        setResult(prev => {
+            const baseResult: Partial<JudgeResult> = {
+                ...prev,
+                qdaRatings: {},
+                cataSelection: [],
+                rataSelection: {},
+                tdsLogs: {},
+                tiLogs: {},
+                nappingData: {},
+                sortingGroups: {},
+            };
+
+            if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
+                const defaultRatings: { [key: string]: number } = {};
+                initialProducts.forEach(product => {
+                    test.config.attributes.forEach(attr => {
+                        const key = `${product.code}_${attr.id}`;
+                        if (test.type === TestType.HEDONIC) {
+                            defaultRatings[key] = 5;
+                        } else { // QDA
+                            const scaleType = attr.scaleType || 'linear';
+                            if (scaleType === 'linear9' || scaleType === 'linear10' || scaleType.startsWith('likert')) {
+                                defaultRatings[key] = 1;
+                            } else {
+                                defaultRatings[key] = 0;
+                            }
+                        }
+                    });
+                });
+                baseResult.qdaRatings = defaultRatings;
+            }
+            return baseResult;
+        });
     }
-  }, [test.id, test.config.products, test.config.randomizePresentation]);
+  }, [test.id, test.config.products, test.config.randomizePresentation, test.type, test.config.attributes]);
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
