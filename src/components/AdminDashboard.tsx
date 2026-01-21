@@ -269,6 +269,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
     setAnalysisLoading(false);
   };
 
+  const getMaxScale = (test: SensoryTest) => {
+    let max = 0;
+    test.config.attributes.forEach(attr => {
+      let s = 100;
+      switch (attr.scaleType) {
+        case 'linear': s = 100; break;
+        case 'linear9': s = 9; break;
+        case 'linear10': s = 10; break;
+        case 'likert5': s = 5; break;
+        case 'likert7': s = 7; break;
+        case 'likert9': s = 9; break;
+        default: s = 100;
+      }
+      if (s > max) max = s;
+    });
+    return max || 100;
+  };
+
+  const handleDuplicateTest = (test: SensoryTest) => {
+    const newTest: SensoryTest = JSON.parse(JSON.stringify(test));
+    newTest.id = generateId();
+    newTest.name = `${test.name} (copy)`;
+    newTest.createdAt = new Date().toISOString();
+    // Keep status same as original or set to 'active'
+    newTest.status = test.status || 'active';
+    onCreateTest(newTest);
+  };
+
   const handleEditClick = (test: SensoryTest) => {
     setEditingId(test.id); setNewTestName(test.name); setNewTestType(test.type);
     setProducts(test.config.products); setAttributes(test.config.attributes);
@@ -458,6 +486,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                             {/* TASTO RESET AGGIUNTO QUI */}
                             <button onClick={() => handleResetResults(test)} className="p-3 text-amber-500 hover:bg-amber-50 rounded-2xl transition-all" title="Svuota Risposte"><RefreshCw size={22}/></button>
                             <button onClick={() => handleExportExcel(test)} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Download size={22}/></button>
+                            <button onClick={() => handleDuplicateTest(test)} className="p-3 text-slate-400 hover:text-indigo-600 rounded-2xl transition-all" title="Duplica Test"><Copy size={20} /></button>
                             <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all"><Pencil size={20}/></button>
                             <SlideToDelete onDelete={() => onDeleteTest(test.id)} />
                         </div>
@@ -478,8 +507,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                             <ResponsiveContainer width="100%" height="100%">
                                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={getChartData(selectedTest)}>
                                     <PolarGrid stroke="#e2e8f0" />
-                                    <PolarAngleAxis dataKey="attribute" tick={{fill: '#64748b', fontSize: 12, fontWeight: 'bold'}} />
-                                    <PolarRadiusAxis domain={[0, 100]} />
+                                      <PolarAngleAxis dataKey="attribute" tick={{fill: '#64748b', fontSize: 12, fontWeight: 'bold'}} />
+                                      <PolarRadiusAxis domain={[0, getMaxScale(selectedTest)]} />
                                     {selectedTest.config.products.map((p, idx) => (
                                         <Radar key={p.id} name={`${p.name} (${p.code})`} dataKey={p.name} stroke={idx === 0 ? "#4f46e5" : idx === 1 ? "#10b981" : "#f59e0b"} fill={idx === 0 ? "#4f46e5" : idx === 1 ? "#10b981" : "#f59e0b"} fillOpacity={0.2} strokeWidth={3} />
                                     ))}
