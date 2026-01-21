@@ -473,12 +473,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                         </div>
                         <h3 className="text-2xl font-black text-slate-900 mb-8 leading-tight tracking-tighter">{test.name}</h3>
                         <div className="flex items-center gap-2 border-t-2 border-slate-50 pt-6">
-                            <button onClick={() => { setSelectedTest(test); setView('DETAIL'); }} className="flex-1 py-3 text-indigo-600 font-black hover:bg-indigo-50 rounded-2xl flex items-center justify-center gap-2 transition-all"> <BarChart2 size={20}/> ANALISI</button>
-                            {/* TASTO RESET AGGIUNTO QUI */}
-                            <button onClick={() => handleResetResults(test)} className="p-3 text-amber-500 hover:bg-amber-50 rounded-2xl transition-all" title="Svuota Risposte"><RefreshCw size={22}/></button>
-                            <button onClick={() => handleExportExcel(test)} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Download size={22}/></button>
-                            <button onClick={() => handleDuplicateTest(test)} className="p-3 text-slate-400 hover:text-indigo-600 rounded-2xl transition-all" title="Duplica Test"><Copy size={20} /></button>
-                            <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all" title="Modifica"><Pencil size={20}/></button>
                             <button 
                                 onClick={() => {
                                     if (window.confirm(`Sei sicuro di voler eliminare definitivamente il test "${test.name}"? L'azione è irreversibile.`)) {
@@ -490,6 +484,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                             >
                                 <Trash2 size={20}/>
                             </button>
+                            <button onClick={() => { setSelectedTest(test); setView('DETAIL'); }} className="flex-1 py-3 text-indigo-600 font-black hover:bg-indigo-50 rounded-2xl flex items-center justify-center gap-2 transition-all"> <BarChart2 size={20}/> ANALISI</button>
+                            {/* TASTO RESET AGGIUNTO QUI */}
+                            <button onClick={() => handleResetResults(test)} className="p-3 text-amber-500 hover:bg-amber-50 rounded-2xl transition-all" title="Svuota Risposte"><RefreshCw size={22}/></button>
+                            <button onClick={() => handleExportExcel(test)} className="p-3 text-emerald-600 hover:bg-emerald-50 rounded-2xl transition-all"><Download size={22}/></button>
+                            <button onClick={() => handleDuplicateTest(test)} className="p-3 text-slate-400 hover:text-indigo-600 rounded-2xl transition-all" title="Duplica Test"><Copy size={20} /></button>
+                            <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all" title="Modifica"><Pencil size={20}/></button>
                         </div>
                     </div>
                 ))}
