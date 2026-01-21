@@ -526,8 +526,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             <div className="relative h-12 flex items-center mt-12">
                 {attr.referenceValue !== undefined && (
                     <div className="absolute z-20 flex flex-col items-center pointer-events-none" style={{ left: `${attr.referenceValue}%`, transform: 'translateX(-50%)', top: '-42px' }}>
-                        <div className="bg-indigo-600 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-lg mb-1 whitespace-nowrap uppercase border border-indigo-400 flex items-center gap-1"> <Target size={10} /> {attr.referenceLabel || 'RIF'}: {attr.referenceValue} </div>
-                        <div className="w-1 h-10 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(79,70,229,0.4)]" />
+                        <div className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-lg mb-1 whitespace-nowrap uppercase border border-red-400 flex items-center gap-1"> <Target size={10} /> {attr.referenceLabel || 'RIF'}: {attr.referenceValue} </div>
+                        <div className="w-1 h-10 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.4)]" />
                     </div>
                 )}
                 <input type="range" min="0" max="100" step="1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
