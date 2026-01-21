@@ -473,7 +473,13 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const renderScaleInput = (attr: Attribute) => {
     if (!currentProduct) return null;
     const scaleType = attr.scaleType || 'linear';
-    const val = (result.qdaRatings || {})[`${currentProduct.code}_${attr.id}`] || 0;
+    let defaultValue = 0;
+    if (scaleType === 'linear9') defaultValue = 1;
+    else if (scaleType === 'linear10') defaultValue = 1;
+    else if (scaleType === 'likert5') defaultValue = 1;
+    else if (scaleType === 'likert7') defaultValue = 1;
+    else if (scaleType === 'likert9') defaultValue = 1;
+    const val = (result.qdaRatings || {})[`${currentProduct.code}_${attr.id}`] ?? defaultValue;
     if (scaleType === 'linear9') {
         return (
             <div className="space-y-6">
