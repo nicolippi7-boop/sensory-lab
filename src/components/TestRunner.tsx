@@ -45,13 +45,13 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     selectedCode: '',
     sensoryCategoryType: 'aroma',
     description: '',
-    intensity: 0,
+    intensity: 1,
     isForcedResponse: false
   });
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [currentDominant, setCurrentDominant] = useState<string | null>(null);
-  const [currentIntensity, setCurrentIntensity] = useState(0);
+  const [currentIntensity, setCurrentIntensity] = useState(1);
   const [tiHistory, setTiHistory] = useState<{t: number, v: number}[]>([]); 
   const timerRef = useRef<number | null>(null);
   const prevTestIdRef = useRef<string | null>(null);
@@ -371,7 +371,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               <div className="flex items-center gap-6">
                 <input
                   type="range"
-                  min="0"
+                  min="1"
                   max="4"
                   value={triangleResponse.intensity}
                   onChange={e => setTriangleResponse(prev => ({ ...prev, intensity: parseInt(e.target.value) }))}
@@ -751,7 +751,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                     <div className="flex-1 bg-slate-100 rounded-3xl border-2 border-slate-200 relative overflow-hidden shadow-inner flex flex-col-reverse touch-none">
                         <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none"> <polyline points={polylinePoints} fill="none" stroke="currentColor" strokeWidth="1" /> </svg>
                         <div className="w-full transition-all duration-75 ease-linear flex items-start justify-center relative" style={{ height: `${currentIntensity}%`, backgroundColor: getColor(currentIntensity) }}> <div className="w-full h-1 bg-white/50 absolute top-0"></div> </div>
-                        <input type="range" min="0" max="100" step="1" value={currentIntensity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentIntensity(Number(e.target.value))} className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10" style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any} />
+                        <input type="range" min="1" max="100" step="1" value={currentIntensity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentIntensity(Number(e.target.value))} className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10" style={{ writingMode: 'bt-lr', WebkitAppearance: 'slider-vertical' } as any} />
                         <div className="absolute right-4 top-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Max</div>
                         <div className="absolute right-4 bottom-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Min</div>
                     </div>
