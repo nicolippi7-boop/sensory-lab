@@ -61,6 +61,57 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [newAttribute, setNewAttribute] = useState('');
 
   useEffect(() => {
+    if (!currentProduct) return;
+
+    if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
+        setResult(prev => {
+            const newQdaRatings = { ...prev.qdaRatings };
+            let isUpdated = false;
+
+            test.config.attributes.forEach(attr => {
+                const key = `${currentProduct.code}_${attr.id}`;
+                if (newQdaRatings[key] === undefined) {
+                    isUpdated = true;
+                    if (test.type === TestType.HEDONIC) {
+                        newQdaRatings[key] = 5;
+                    } else { // QDA
+                        const scaleType = attr.scaleType || 'linear';
+                        if (scaleType === 'linear9' || scaleType === 'linear10' || scaleType.startsWith('likert')) {
+                            newQdaRatings[key] = 1;
+                        } else {
+                            newQdaRatings[key] = 0;
+                        }
+                    }
+                }
+            });
+
+            if (isUpdated) {
+                return { ...prev, qdaRatings: newQdaRatings };
+            }
+            return prev;
+        });
+    } else if (test.type === TestType.FLASH_PROFILE) {
+        setResult(prev => {
+            const newQdaRatings = { ...prev.qdaRatings };
+            let isUpdated = false;
+
+            customAttributes.forEach(attr => {
+                const key = `${currentProduct.code}_${attr}`;
+                if (newQdaRatings[key] === undefined) {
+                    isUpdated = true;
+                    newQdaRatings[key] = 0; // Flash profile sliders are 0-10, default 0.
+                }
+            });
+
+            if (isUpdated) {
+                return { ...prev, qdaRatings: newQdaRatings };
+            }
+            return prev;
+        });
+    }
+}, [currentProduct, test.type, test.config.attributes, customAttributes]);
+
+  useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
         if (test.config.randomizePresentation) {
             setProducts(shuffleArray(test.config.products));
