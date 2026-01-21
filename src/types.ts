@@ -39,6 +39,7 @@ export interface TestConfig {
   randomizePresentation?: boolean;
   correctOddSampleCode?: string; 
   durationSeconds?: number;
+  enableTasterNotes?: boolean;
 }
 
 export interface SensoryTest {
