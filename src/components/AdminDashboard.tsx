@@ -481,7 +481,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
                             <button onClick={() => handleEditClick(test)} className="p-3 text-slate-300 hover:text-indigo-600 rounded-2xl transition-all" title="Modifica"><Pencil size={20}/></button>
                             <button 
                                 onClick={() => {
-                                    if (window.confirm(`Sei sicuro di voler eliminare definitivamente il test "${test.name}" e tutti i suoi ${results.filter(r => r.testId === test.id).length} risultati? L'azione è irreversibile.`)) {
+                                    if (window.confirm(`Sei sicuro di voler eliminare definitivamente il test "${test.name}"? L'azione è irreversibile.`)) {
                                         onDeleteTest(test.id);
                                     }
                                 }} 
