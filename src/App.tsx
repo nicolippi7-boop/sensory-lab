@@ -10,6 +10,9 @@ import { supabase } from './components/supabaseClient';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>(() => {
+    const savedView = localStorage.getItem("view");
+    if (savedView) return savedView as ViewState;
+
     const params = new URLSearchParams(window.location.search);
     return params.get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME';
   });
@@ -82,6 +85,11 @@ const App: React.FC = () => {
     }
   }, [activeTestId]);
 
+  // 🔥 SALVATAGGIO automatico della view
+  useEffect(() => {
+    localStorage.setItem("view", view);
+  }, [view]);
+
   const handleCreateTest = async (test: SensoryTest) => {
     try {
       await supabase.from('tests').insert([{ id: String(test.id), name: test.name, type: test.type, status: test.status, config: test.config }]);
@@ -104,6 +112,7 @@ const App: React.FC = () => {
       // 🔥 PULIZIA persistenza dopo invio test
       localStorage.removeItem("judgeName");
       localStorage.removeItem("activeTestId");
+      localStorage.removeItem("view");
 
       setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
       setJudgeName('');
