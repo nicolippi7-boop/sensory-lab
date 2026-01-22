@@ -9,22 +9,37 @@ import { Peer } from 'peerjs';
 import { supabase } from './components/supabaseClient';
 
 const App: React.FC = () => {
+  // --- LOGICA DI RECUPERO DAL LOCAL STORAGE ---
   const [view, setView] = useState<ViewState>(() => {
-    const savedView = localStorage.getItem("view");
-    if (savedView) return savedView as ViewState;
+    // 1. Controlliamo se c'è una sessione salvata
+    const savedView = localStorage.getItem('sensory_view');
+    if (savedView === 'JUDGE_RUNNER') return 'JUDGE_RUNNER';
 
+    // 2. Altrimenti controllo il parametro URL
     const params = new URLSearchParams(window.location.search);
     return params.get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME';
   });
 
+  // Inizializziamo il nome e il test attivo recuperandoli se esistono
+  const [judgeName, setJudgeName] = useState(() => localStorage.getItem('sensory_judge_name') || '');
+  const [activeTestId, setActiveTestId] = useState(() => localStorage.getItem('sensory_active_test_id') || '');
+
   const [tests, setTests] = useState<SensoryTest[]>([]);
   const [results, setResults] = useState<JudgeResult[]>([]);
-  const [judgeName, setJudgeName] = useState('');
-  const [activeTestId, setActiveTestId] = useState('');
   const [peerId, setPeerId] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const peerRef = useRef<any>(null);
+
+  // --- LOGICA DI SALVATAGGIO AUTOMATICO ---
+  useEffect(() => {
+    // Salviamo lo stato ogni volta che cambia
+    if (view === 'JUDGE_RUNNER') {
+      localStorage.setItem('sensory_view', view);
+      localStorage.setItem('sensory_judge_name', judgeName);
+      localStorage.setItem('sensory_active_test_id', activeTestId);
+    }
+  }, [view, judgeName, activeTestId]);
 
   const fetchAllData = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
@@ -62,34 +77,6 @@ const App: React.FC = () => {
     return () => { if (peerRef.current) peerRef.current.destroy(); };
   }, []);
 
-  // 🔥 RECUPERO stato persistente dopo refresh
-  useEffect(() => {
-    const savedJudge = localStorage.getItem("judgeName");
-    const savedTest = localStorage.getItem("activeTestId");
-
-    if (savedJudge) setJudgeName(savedJudge);
-    if (savedTest) setActiveTestId(savedTest);
-  }, []);
-
-  // 🔥 SALVATAGGIO automatico del nome giudice
-  useEffect(() => {
-    if (judgeName) {
-      localStorage.setItem("judgeName", judgeName);
-    }
-  }, [judgeName]);
-
-  // 🔥 SALVATAGGIO automatico del test selezionato
-  useEffect(() => {
-    if (activeTestId) {
-      localStorage.setItem("activeTestId", activeTestId);
-    }
-  }, [activeTestId]);
-
-  // 🔥 SALVATAGGIO automatico della view
-  useEffect(() => {
-    localStorage.setItem("view", view);
-  }, [view]);
-
   const handleCreateTest = async (test: SensoryTest) => {
     try {
       await supabase.from('tests').insert([{ id: String(test.id), name: test.name, type: test.type, status: test.status, config: test.config }]);
@@ -100,22 +87,14 @@ const App: React.FC = () => {
   const handleComplete = async (res: JudgeResult) => {
     const isJudgeMode = new URLSearchParams(window.location.search).get('mode') === 'judge';
     try {
-      await supabase.from('results').insert([{ 
-        test_id: String(res.testId), 
-        judge_name: String(res.judgeName), 
-        submitted_at: new Date().toISOString(), 
-        responses: res 
-      }]);
-
+      await supabase.from('results').insert([{ test_id: String(res.testId), judge_name: String(res.judgeName), submitted_at: new Date().toISOString(), responses: res }]);
       await fetchAllData();
-
-      // 🔥 PULIZIA persistenza dopo invio test
-      localStorage.removeItem("judgeName");
-      localStorage.removeItem("activeTestId");
-      localStorage.removeItem("view");
-
+      
+      // --- PULIZIA LOCAL STORAGE A FINE TEST ---
+      localStorage.clear(); 
+      
       setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
-      setJudgeName('');
+      setJudgeName(''); 
       setActiveTestId('');
       alert("✅ Test inviato!");
     } catch (err: any) { alert(`Errore: ${err.message}`); }
@@ -162,11 +141,14 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {view === 'JUDGE_RUNNER' && activeTestId && (
+      {view === 'JUDGE_RUNNER' && activeTestId && tests.length > 0 && (
         <TestRunner 
           test={tests.find(t => t.id === activeTestId)!}
           judgeName={judgeName} onComplete={handleComplete}
-          onExit={() => setView(new URLSearchParams(window.location.search).get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME')}
+          onExit={() => {
+            localStorage.clear(); // Puliamo se esce volontariamente
+            setView(new URLSearchParams(window.location.search).get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME');
+          }}
         />
       )}
 
