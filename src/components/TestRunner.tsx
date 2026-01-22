@@ -22,43 +22,178 @@ const shuffleArray = <T,>(array: T[]): T[] => {
     return newArr;
 };
 
+// Define a type for the persistent state
+interface TestRunnerPersistentState {
+    products: Product[];
+    currentProductIndex: number;
+    result: Partial<JudgeResult>;
+    selectedOne: string | null;
+    triangleStep: 'selection' | 'forced_response' | 'details' | 'confirm';
+    triangleResponse: TriangleResponse;
+    isTimerRunning: boolean;
+    elapsedTime: number;
+    currentDominant: string | null;
+    currentIntensity: number;
+    tiHistory: {t: number, v: number}[];
+    placedProducts: string[];
+    customAttributes: string[];
+}
+
+const getLocalStorageKey = (testId: string, judgeName: string) => `sensoryLabTestRunnerState_${testId}_${judgeName}`;
+
 export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onComplete, onExit }) => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [currentProductIndex, setCurrentProductIndex] = useState(0);
-  const [result, setResult] = useState<Partial<JudgeResult>>({
-    testId: test.id,
-    judgeName,
-    qdaRatings: {},
-    cataSelection: [],
-    rataSelection: {},
-    tdsLogs: {},
-    tiLogs: {},
-    nappingData: {},
-    sortingGroups: {},
-    tdsStartTime: undefined,
-    tdsEndTime: undefined,
+  const localStorageKey = getLocalStorageKey(test.id, judgeName);
+
+  const loadState = (): TestRunnerPersistentState | null => {
+      try {
+          const serializedState = localStorage.getItem(localStorageKey);
+          if (serializedState === null) {
+              return null;
+          }
+          return JSON.parse(serializedState);
+      } catch (error) {
+          console.error("Error loading state from local storage:", error);
+          return null;
+      }
+  };
+
+  const saveState = (state: TestRunnerPersistentState) => {
+      try {
+          const serializedState = JSON.stringify(state);
+          localStorage.setItem(localStorageKey, serializedState);
+      } catch (error) {
+          console.error("Error saving state to local storage:", error);
+      }
+  };
+
+  const initialState = loadState();
+
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (initialState?.products && initialState.products.length > 0) {
+        return initialState.products;
+    }
+    return test.config.randomizePresentation
+        ? shuffleArray(test.config.products)
+        : [...test.config.products];
   });
 
-  const [selectedOne, setSelectedOne] = useState<string | null>(null);
-  const [triangleStep, setTriangleStep] = useState<'selection' | 'forced_response' | 'details' | 'confirm'>('selection');
-  const [triangleResponse, setTriangleResponse] = useState<TriangleResponse>({
+  const [currentProductIndex, setCurrentProductIndex] = useState<number>(() => initialState?.currentProductIndex || 0);
+  const [result, setResult] = useState<Partial<JudgeResult>>(() => {
+    const baseResult: Partial<JudgeResult> = {
+        testId: test.id,
+        judgeName,
+        qdaRatings: {},
+        cataSelection: [],
+        rataSelection: {},
+        tdsLogs: {},
+        tiLogs: {},
+        nappingData: {},
+        sortingGroups: {},
+        tdsStartTime: undefined,
+        tdsEndTime: undefined,
+    };
+
+    // Merge loaded result with default structure, ensuring no data loss
+    if (initialState?.result) {
+        return { ...baseResult, ...initialState.result };
+    }
+    
+    // Initial default ratings for QDA/HEDONIC if no loaded state
+    if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
+        const defaultRatings: { [key: string]: number } = {};
+        products.forEach(product => { // Use 'products' state, which is already initialized with loaded or shuffled products
+            test.config.attributes.forEach(attr => {
+                const key = `${product.code}_${attr.id}`;
+                if (test.type === TestType.HEDONIC) {
+                    defaultRatings[key] = 5;
+                } else { // QDA
+                    const scaleType = attr.scaleType || 'linear';
+                    if (scaleType === 'linear9' || scaleType === 'linear10' || scaleType.startsWith('likert')) {
+                        defaultRatings[key] = 1;
+                    } else {
+                        defaultRatings[key] = 0;
+                    }
+                }
+            });
+        });
+        baseResult.qdaRatings = defaultRatings;
+    }
+    return baseResult;
+  });
+
+  const [selectedOne, setSelectedOne] = useState<string | null>(() => initialState?.selectedOne || null);
+  const [triangleStep, setTriangleStep] = useState<'selection' | 'forced_response' | 'details' | 'confirm'>(() => initialState?.triangleStep || 'selection');
+  const [triangleResponse, setTriangleResponse] = useState<TriangleResponse>(() => initialState?.triangleResponse || {
     selectedCode: '',
     sensoryCategoryType: 'aroma',
     description: '',
     intensity: 1,
     isForcedResponse: false
   });
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [currentDominant, setCurrentDominant] = useState<string | null>(null);
-  const [currentIntensity, setCurrentIntensity] = useState(1);
-  const [tiHistory, setTiHistory] = useState<{t: number, v: number}[]>([]); 
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(() => initialState?.isTimerRunning || false);
+  const [elapsedTime, setElapsedTime] = useState<number>(() => initialState?.elapsedTime || 0);
+  const [currentDominant, setCurrentDominant] = useState<string | null>(() => initialState?.currentDominant || null);
+  const [currentIntensity, setCurrentIntensity] = useState<number>(() => initialState?.currentIntensity || 1);
+  const [tiHistory, setTiHistory] = useState<{t: number, v: number}[]>(() => initialState?.tiHistory || []); 
+  
   const timerRef = useRef<number | null>(null);
-  const prevTestIdRef = useRef<string | null>(null);
 
-  const [placedProducts, setPlacedProducts] = useState<string[]>([]);
-  const [customAttributes, setCustomAttributes] = useState<string[]>([]);
+  const [placedProducts, setPlacedProducts] = useState<string[]>(() => initialState?.placedProducts || []);
+  const [customAttributes, setCustomAttributes] = useState<string[]>(() => initialState?.customAttributes || []);
   const [newAttribute, setNewAttribute] = useState('');
+
+  // Effect to save state to local storage whenever any relevant state changes
+  useEffect(() => {
+    const stateToSave: TestRunnerPersistentState = {
+        products,
+        currentProductIndex,
+        result,
+        selectedOne,
+        triangleStep,
+        triangleResponse,
+        isTimerRunning,
+        elapsedTime,
+        currentDominant,
+        currentIntensity,
+        tiHistory,
+        placedProducts,
+        customAttributes,
+    };
+    saveState(stateToSave);
+  }, [
+    products,
+    currentProductIndex,
+    result,
+    selectedOne,
+    triangleStep,
+    triangleResponse,
+    isTimerRunning,
+    elapsedTime,
+    currentDominant,
+    currentIntensity,
+    tiHistory,
+    placedProducts,
+    customAttributes,
+  ]);
+
+  useEffect(() => {
+    // Re-initialize timer if it was running
+    if (isTimerRunning && (test.type === TestType.TDS || test.type === TestType.TIME_INTENSITY)) {
+        timerRef.current = window.setInterval(() => { setElapsedTime(prev => prev + 0.5); }, 500);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isTimerRunning, test.type]); // Only run on isTimerRunning or test.type change
+
+  // Clear local storage on complete or exit
+  const handleCompleteAndClearStorage = (res: JudgeResult) => {
+    localStorage.removeItem(localStorageKey);
+    onComplete(res);
+  };
+
+  const handleExitAndClearStorage = () => {
+    localStorage.removeItem(localStorageKey);
+    onExit();
+  };
 
   useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
@@ -188,7 +323,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     // Non facciamo più la chiamata supabase.from('results').insert qui!
     // Deleghiamo tutto alla funzione onComplete passata da App.tsx
     // che è già configurata per gestire il database correttamente.
-    onComplete(finalResult);
+    handleCompleteAndClearStorage(finalResult);
   };
 
   const handleQdaChange = (attrId: string, value: number, prodCode: string = currentProduct?.code || '') => {
@@ -198,6 +333,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       qdaRatings: { ...prev.qdaRatings, [`${prodCode}_${attrId}`]: value }
     }));
   };
+
 
   const handleCataToggle = (attrId: string) => {
     if (!currentProduct) return;
@@ -474,7 +610,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   triangleSelection: selectedOne || '',
                   triangleResponse
                 };
-                onComplete(final);
+                handleCompleteAndClearStorage(final);
               }}
               className="flex-1 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-all shadow-lg"
             >
@@ -494,12 +630,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       </div>
       <div className="flex flex-wrap justify-center gap-10">
         {products.map(p => (
-          <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`w-48 h-48 rounded-3xl border-4 flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-4 ring-indigo-200 scale-105' : 'border-slate-200 hover:border-indigo-300 bg-white'}`}> <span className="text-xs text-slate-400 uppercase tracking-widest font-bold">Campione</span> <span className="text-4xl font-black font-mono">{p.code}</span> </button>
+          <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`w-48 h-48 rounded-3xl border-4 flex flex-col items-center justify-center gap-2 transition-all shadow-sm active:scale-95 ${selectedOne === p.code ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-4 ring-indigo-100 scale-105' : 'border-slate-200 hover:border-indigo-300 bg-white'}`}> <span className="text-xs text-slate-400 uppercase tracking-widest font-bold">Campione</span> <span className="text-4xl font-black font-mono">{p.code}</span> </button>
         ))}
       </div>
       <button disabled={!selectedOne} onClick={() => {
           const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), pairedSelection: selectedOne || '' };
-          onComplete(final);
+          handleCompleteAndClearStorage(final);
       }} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
     </div>
   );
@@ -905,7 +1041,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giudice</span>
              <span className="text-sm font-bold text-slate-900">{judgeName}</span>
           </div>
-          <button onClick={onExit} className="text-xs font-black text-red-500 hover:text-red-700 uppercase tracking-widest border border-red-100 px-4 py-2 rounded-full bg-red-50/30 transition-colors">Esci</button>
+          <button onClick={handleExitAndClearStorage} className="text-xs font-black text-red-500 hover:text-red-700 uppercase tracking-widest border border-red-100 px-4 py-2 rounded-full bg-red-50/30 transition-colors">Esci</button>
         </div>
       </header>
       <main className="flex-1 p-6 md:p-12">

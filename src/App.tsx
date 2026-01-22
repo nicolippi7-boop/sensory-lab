@@ -11,17 +11,35 @@ import { supabase } from './components/supabaseClient';
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME';
+    const modeParam = params.get('mode');
+    const storedView = localStorage.getItem('sensoryLabView');
+
+    if (modeParam === 'judge') {
+      return 'JUDGE_LOGIN';
+    }
+    return (storedView as ViewState) || 'HOME';
   });
 
   const [tests, setTests] = useState<SensoryTest[]>([]);
   const [results, setResults] = useState<JudgeResult[]>([]);
-  const [judgeName, setJudgeName] = useState('');
-  const [activeTestId, setActiveTestId] = useState('');
+  const [judgeName, setJudgeName] = useState<string>(() => localStorage.getItem('sensoryLabJudgeName') || '');
+  const [activeTestId, setActiveTestId] = useState<string>(() => localStorage.getItem('sensoryLabActiveTestId') || '');
   const [peerId, setPeerId] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   const peerRef = useRef<any>(null);
+
+  useEffect(() => {
+    localStorage.setItem('sensoryLabView', view);
+  }, [view]);
+
+  useEffect(() => {
+    localStorage.setItem('sensoryLabJudgeName', judgeName);
+  }, [judgeName]);
+
+  useEffect(() => {
+    localStorage.setItem('sensoryLabActiveTestId', activeTestId);
+  }, [activeTestId]);
 
   const fetchAllData = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
