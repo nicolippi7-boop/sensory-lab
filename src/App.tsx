@@ -52,15 +52,35 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [view]);
 
-  // La randomizzazione della presentazione viene gestita nel componente TestRunner
-  // per assicurare che ogni assaggiatore riceva un ordine indipendente.
-
   useEffect(() => {
     const peer = new Peer();
     peerRef.current = peer;
     peer.on('open', (id: string) => setPeerId(id));
     return () => { if (peerRef.current) peerRef.current.destroy(); };
   }, []);
+
+  // 🔥 RECUPERO stato persistente dopo refresh
+  useEffect(() => {
+    const savedJudge = localStorage.getItem("judgeName");
+    const savedTest = localStorage.getItem("activeTestId");
+
+    if (savedJudge) setJudgeName(savedJudge);
+    if (savedTest) setActiveTestId(savedTest);
+  }, []);
+
+  // 🔥 SALVATAGGIO automatico del nome giudice
+  useEffect(() => {
+    if (judgeName) {
+      localStorage.setItem("judgeName", judgeName);
+    }
+  }, [judgeName]);
+
+  // 🔥 SALVATAGGIO automatico del test selezionato
+  useEffect(() => {
+    if (activeTestId) {
+      localStorage.setItem("activeTestId", activeTestId);
+    }
+  }, [activeTestId]);
 
   const handleCreateTest = async (test: SensoryTest) => {
     try {
@@ -72,10 +92,22 @@ const App: React.FC = () => {
   const handleComplete = async (res: JudgeResult) => {
     const isJudgeMode = new URLSearchParams(window.location.search).get('mode') === 'judge';
     try {
-      await supabase.from('results').insert([{ test_id: String(res.testId), judge_name: String(res.judgeName), submitted_at: new Date().toISOString(), responses: res }]);
+      await supabase.from('results').insert([{ 
+        test_id: String(res.testId), 
+        judge_name: String(res.judgeName), 
+        submitted_at: new Date().toISOString(), 
+        responses: res 
+      }]);
+
       await fetchAllData();
+
+      // 🔥 PULIZIA persistenza dopo invio test
+      localStorage.removeItem("judgeName");
+      localStorage.removeItem("activeTestId");
+
       setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
-      setJudgeName(''); setActiveTestId('');
+      setJudgeName('');
+      setActiveTestId('');
       alert("✅ Test inviato!");
     } catch (err: any) { alert(`Errore: ${err.message}`); }
   };
