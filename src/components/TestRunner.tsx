@@ -110,7 +110,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
-  // MODIFICA: Timer effect migliorato per TI e TDS
+  // CORREZIONE: Timer effect per TI e TDS
   useEffect(() => {
     if (isTimerRunning) {
       timerRef.current = window.setInterval(() => {
@@ -119,7 +119,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           const duration = test.config.durationSeconds || 60;
           if (newTime >= duration) {
             stopTimer();
-            return duration;
+            return parseFloat(duration.toFixed(1));
           }
           return parseFloat(newTime.toFixed(1));
         });
@@ -130,21 +130,28 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     };
   }, [isTimerRunning, test.config.durationSeconds]);
 
+  // CORREZIONE: TI Effect migliorato
   useEffect(() => {
-      if (test.type === TestType.TIME_INTENSITY && isTimerRunning && products[currentProductIndex]) {
-          const currentProduct = products[currentProductIndex];
-          const currentTime = parseFloat(elapsedTime.toFixed(1));
-          const logKey = currentProduct.code;
-          const newEntry: TILogEntry = { time: currentTime, intensity: currentIntensity };
-         
-          setTiHistory(prev => [...prev, { t: currentTime, v: currentIntensity }]);
-         
-          setResult(prev => ({
-              ...prev,
-              tiLogs: { ...prev.tiLogs, [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry] }
-          }));
-      }
-  }, [elapsedTime, test.type, isTimerRunning, currentProductIndex, products, currentIntensity]);
+    if (test.type === TestType.TIME_INTENSITY && isTimerRunning && currentProduct) {
+      const currentTime = parseFloat(elapsedTime.toFixed(1));
+      const logKey = currentProduct.code;
+      const newEntry: TILogEntry = { time: currentTime, intensity: currentIntensity };
+     
+      setTiHistory(prev => {
+        // Rimuovi duplicati per lo stesso tempo (mantieni solo l'ultimo)
+        const filtered = prev.filter(p => Math.abs(p.t - currentTime) > 0.09);
+        return [...filtered, { t: currentTime, v: currentIntensity }];
+      });
+     
+      setResult(prev => ({
+        ...prev,
+        tiLogs: { 
+          ...prev.tiLogs, 
+          [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry] 
+        }
+      }));
+    }
+  }, [elapsedTime, test.type, isTimerRunning, currentIntensity, currentProduct]);
 
   const currentProduct = products[currentProductIndex];
 
@@ -155,12 +162,11 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       setIsTimerRunning(false);
       setElapsedTime(0);
       setCurrentDominant(null);
-      setCurrentIntensity(0);
+      setCurrentIntensity(1); // CORREZIONE: Reset a 1 non 0
       setTiHistory([]);
       if (timerRef.current) clearInterval(timerRef.current);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      // Per l'ultimo campione, assicuriamo che END sia registrato
       finalizeTDSAndSubmit();
     }
   };
@@ -195,7 +201,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   };
 
-  // --- FUNZIONE CORRETTA: ALLINEATA AD APP.TSX E AL DATABASE ---
   const submitAll = async () => {
     const finalResult: JudgeResult = {
         ...result as JudgeResult,
@@ -204,10 +209,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         triangleSelection: selectedOne || undefined,
         triangleResponse: test.type === TestType.TRIANGLE ? triangleResponse : undefined
     };
-   
-    // Non facciamo più la chiamata supabase.from('results').insert qui!
-    // Deleghiamo tutto alla funzione onComplete passata da App.tsx
-    // che è già configurata per gestire il database correttamente.
     onComplete(finalResult);
   };
 
@@ -221,7 +222,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
 
   const handleCataToggle = (attrId: string) => {
     if (!currentProduct) return;
-    const key = `${currentProduct.code}_${attr.id}`;
+    const key = `${currentProduct.code}_${attrId}`;
     const currentSelection = result.cataSelection || [];
     const isSelected = currentSelection.includes(key);
     const newSelection = isSelected ? currentSelection.filter(k => k !== key) : [...currentSelection, key];
@@ -230,14 +231,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
 
   const handleRataChange = (attrId: string, intensity: number) => {
       if (!currentProduct) return;
-      const key = `${currentProduct.code}_${attr.id}`;
+      const key = `${currentProduct.code}_${attrId}`;
       setResult(prev => ({ ...prev, rataSelection: { ...prev.rataSelection, [key]: intensity } }));
   };
 
-  // MODIFICA: startTimer senza setInterval interno
   const startTimer = () => {
     setIsTimerRunning(true);
     setElapsedTime(0);
+    setTiHistory([]);
     if (test.type === TestType.TDS && currentProduct) {
       setResult(prev => {
         const logKey = currentProduct.code;
@@ -250,7 +251,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         };
       });
     }
-    // RIMOSSO: timerRef.current = window.setInterval(() => { setElapsedTime(prev => prev + 0.5); }, 500);
   };
 
   const stopTimer = () => {
@@ -347,10 +347,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   onClick={() => {
                     setTriangleResponse(prev => ({ ...prev, isForcedResponse: option.value }));
                     if (option.value) {
-                      // Se è forzata, vai direttamente al submit
                       setTriangleStep('confirm');
                     } else {
-                      // Se è reale, vai ai dettagli
                       setTriangleStep('details');
                     }
                   }}
@@ -768,7 +766,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                 ))}
               </div>
               
-              {/* MODIFICA: Aggiunta cronologia TDS */}
+              {/* Cronologia TDS */}
               <div className="mb-8">
                 <h4 className="text-lg font-semibold text-slate-700 mb-4 text-center">Cronologia TDS</h4>
                 <div className="bg-slate-50 rounded-xl p-4">
@@ -823,7 +821,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         return 'rgb(239, 68, 68)'; 
     };
     
-    // MODIFICA: SVG migliorato
+    // SVG migliorato
     const chartWidth = 100;
     const chartHeight = 100;
     const polylinePoints = tiHistory.map(p => {
@@ -831,6 +829,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         const y = chartHeight - (p.v / 100) * chartHeight;
         return `${x},${y}`;
     }).join(' ');
+    
+    // CORREZIONE: Gestione input intensità
+    const handleIntensityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = Number(e.target.value);
+      setCurrentIntensity(value);
+    };
     
     return (
       <div className="max-w-2xl mx-auto w-full">
@@ -849,7 +853,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
              </button>
           ) : isTimerRunning ? (
             <div className="flex flex-col gap-8">
-              {/* MODIFICA: Grafico SVG completo */}
+              {/* Grafico SVG completo */}
               <div className="bg-white p-6 rounded-3xl border border-slate-200">
                 <h3 className="text-lg font-semibold text-slate-700 mb-4 text-center">Andamento Temporale</h3>
                 <div className="h-64">
@@ -873,12 +877,31 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                 </div>
               </div>
               
+              {/* CORREZIONE: Slider funzionante */}
               <div className="flex items-center gap-8">
                 <div className="flex-1 bg-slate-100 rounded-3xl border-2 border-slate-200 relative overflow-hidden shadow-inner flex flex-col-reverse touch-none h-[400px]">
-                  <div className="w-full transition-all duration-75 ease-linear flex items-start justify-center relative" style={{ height: `${currentIntensity}%`, backgroundColor: getColor(currentIntensity) }}> 
+                  <div 
+                    className="w-full transition-all duration-75 ease-linear flex items-start justify-center relative" 
+                    style={{ 
+                      height: `${currentIntensity}%`, 
+                      backgroundColor: getColor(currentIntensity) 
+                    }}> 
                     <div className="w-full h-1 bg-white/50 absolute top-0"></div> 
                   </div>
-                  <input type="range" min="1" max="100" step="1" value={currentIntensity} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentIntensity(Number(e.target.value))} className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10" style={{ writingMode: 'vertical-lr', direction: 'rtl' } as any} />
+                  {/* CORREZIONE: Input funzionante */}
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="100" 
+                    step="1" 
+                    value={currentIntensity} 
+                    onChange={handleIntensityChange} 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10" 
+                    style={{ 
+                      writingMode: 'vertical-lr', 
+                      direction: 'rtl' 
+                    } as React.CSSProperties} 
+                  />
                   <div className="absolute right-4 top-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Max</div>
                   <div className="absolute right-4 bottom-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Min</div>
                 </div>
@@ -970,118 +993,172 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     );
   };
 
+  // CORREZIONE: Flash Profile senza useEffect duplicato
   const renderFlashProfile = () => {
-      if (!currentProduct) return null;
-      
-      // MODIFICA: Effect per caricare attributi salvati
-      useEffect(() => {
-        const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_attributes`);
-        if (savedAttrs && customAttributes.length === 0) {
-          try {
-            setCustomAttributes(JSON.parse(savedAttrs));
-          } catch (e) {
-            console.error('Errore caricamento attributi salvati', e);
+    if (!currentProduct) return null;
+    
+    // Gestione caricamento attributi salvati
+    const loadSavedAttributes = () => {
+      const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_attributes`);
+      if (savedAttrs && customAttributes.length === 0) {
+        try {
+          const parsed = JSON.parse(savedAttrs);
+          if (Array.isArray(parsed)) {
+            setCustomAttributes(parsed);
           }
+        } catch (e) {
+          console.error('Errore caricamento attributi salvati', e);
         }
-      }, [test.id, customAttributes.length]);
-      
-      return (
+      }
+    };
+
+    // Carica attributi salvati solo al primo render
+    React.useEffect(() => {
+      loadSavedAttributes();
+    }, [test.id]); // Solo quando cambia test.id
+
+    const handleAddAttribute = () => {
+      if (newAttribute.trim() && !customAttributes.includes(newAttribute.trim())) {
+        setCustomAttributes([...customAttributes, newAttribute.trim()]);
+        setNewAttribute('');
+      }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && newAttribute.trim()) {
+        if (!customAttributes.includes(newAttribute.trim())) {
+          setCustomAttributes([...customAttributes, newAttribute.trim()]);
+          setNewAttribute('');
+        }
+      }
+    };
+
+    const handleRemoveAttribute = (index: number) => {
+      const newAttrs = [...customAttributes];
+      newAttrs.splice(index, 1);
+      setCustomAttributes(newAttrs);
+    };
+
+    const handleNextWithSave = () => {
+      // Salva attributi in localStorage
+      if (customAttributes.length > 0) {
+        localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(customAttributes));
+      }
+      handleNextProduct();
+    };
+
+    return (
       <div className="w-full max-w-3xl mx-auto">
-         <div className="mb-8 p-6 bg-fuchsia-50 border border-fuchsia-100 rounded-3xl flex justify-between items-center shadow-sm">
-            <div> <p className="text-sm text-fuchsia-600 font-bold uppercase tracking-widest mb-1">Campione</p> <p className="text-5xl font-black text-fuchsia-900 font-mono">{currentProduct.code}</p> </div>
-            <div className="text-right"> <p className="text-xs text-fuchsia-400 font-bold uppercase mb-1">Progresso</p> <p className="text-lg font-bold text-fuchsia-900">{currentProductIndex + 1} / {products.length}</p> </div>
+        <div className="mb-8 p-6 bg-fuchsia-50 border border-fuchsia-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div> 
+            <p className="text-sm text-fuchsia-600 font-bold uppercase tracking-widest mb-1">Campione</p> 
+            <p className="text-5xl font-black text-fuchsia-900 font-mono">{currentProduct.code}</p> 
           </div>
-          
-          {/* MODIFICA: Sezione migliorata per aggiungere attributi */}
-          <div className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Aggiungi un nuovo attributo descrittivo</h3>
-            <div className="flex gap-3">
-              <input value={newAttribute} onChange={e => setNewAttribute(e.target.value)} placeholder="Es: Note fruttate, amaro persistente..." className="flex-1 p-4 border-2 border-slate-200 rounded-xl shadow-sm focus:border-fuchsia-500 outline-none font-medium transition-all" onKeyDown={e => { if(e.key === 'Enter' && newAttribute.trim()) { if (!customAttributes.includes(newAttribute.trim())) { setCustomAttributes([...customAttributes, newAttribute.trim()]); } setNewAttribute(''); } }} />
-              <button onClick={() => { if(newAttribute.trim() && !customAttributes.includes(newAttribute.trim())) { setCustomAttributes([...customAttributes, newAttribute.trim()]); setNewAttribute(''); } }} className="px-8 py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black active:scale-95 transition-all flex items-center gap-2"> 
-                <span className="text-xl">+</span> Aggiungi
-              </button>
-            </div>
-            <div className="mt-3 text-sm text-slate-500">
-              Suggerimenti: aroma, sapore, texture, aftertaste, aspetto...
-            </div>
+          <div className="text-right"> 
+            <p className="text-xs text-fuchsia-400 font-bold uppercase mb-1">Progresso</p> 
+            <p className="text-lg font-bold text-fuchsia-900">{currentProductIndex + 1} / {products.length}</p> 
           </div>
-          
-          <div className="space-y-6 mb-12">
-            {customAttributes.length === 0 ? (
-              <div className="text-center py-12">
-                <Layers size={64} className="mx-auto mb-6 text-slate-300" />
-                <h3 className="text-xl font-semibold text-slate-700 mb-2">Nessun attributo ancora creato</h3>
-                <p className="text-slate-500">Inizia aggiungendo degli attributi descrittivi usando il campo sopra.</p>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-lg font-semibold text-slate-900">
-                  Attributi Creati ({customAttributes.length})
-                </h3>
-                {customAttributes.map((attr, index) => {
-                  const currentValue = result.qdaRatings?.[`${currentProduct.code}_${attr}`] || 0;
-                  return (
-                    <div key={index} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in slide-in-from-bottom-2">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-fuchsia-100 flex items-center justify-center text-fuchsia-700 font-bold">
-                            {index + 1}
-                          </div>
-                          <div>
-                            <span className="text-lg font-bold text-slate-800">{attr}</span>
-                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                              <div className={`w-2 h-2 rounded-full ${
-                                currentValue === 0 ? 'bg-slate-300' :
-                                currentValue <= 3 ? 'bg-green-500' :
-                                currentValue <= 6 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`} />
-                              {currentValue === 0 ? 'Non valutato' : `Intensità: ${currentValue}/10`}
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const newAttrs = [...customAttributes];
-                            newAttrs.splice(index, 1);
-                            setCustomAttributes(newAttrs);
-                          }}
-                          className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <div className="space-y-4">
-                        <input type="range" min="0" max="10" step="0.5" 
-                               value={currentValue} 
-                               onChange={(e) => handleQdaChange(attr, parseFloat(e.target.value))} 
-                               className="w-full h-3 bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200 rounded-full appearance-none [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-fuchsia-500 [&::-webkit-slider-thumb]:shadow-lg" />
-                        <div className="flex justify-between text-sm text-slate-500">
-                          <span>0 - Assente</span>
-                          <span className="font-bold">Valore: {currentValue}</span>
-                          <span>10 - Molto intenso</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </>
-            )}
-          </div>
-          
-          <div className="flex justify-center">
-            <button onClick={() => {
-              // MODIFICA: Salva attributi in localStorage
-              if (customAttributes.length > 0) {
-                localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(customAttributes));
-              }
-              handleNextProduct();
-            }} className="px-12 py-5 bg-fuchsia-600 text-white rounded-2xl hover:bg-fuchsia-700 font-black shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95 uppercase tracking-widest"> 
-              {currentProductIndex < products.length - 1 ? 'Salva e Prossimo' : 'Concludi Flash Profile'} 
-              <ArrowRight size={24} /> 
+        </div>
+        
+        {/* Sezione per aggiungere attributi */}
+        <div className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Aggiungi un nuovo attributo descrittivo</h3>
+          <div className="flex gap-3">
+            <input 
+              value={newAttribute} 
+              onChange={e => setNewAttribute(e.target.value)} 
+              placeholder="Es: Note fruttate, amaro persistente..." 
+              className="flex-1 p-4 border-2 border-slate-200 rounded-xl shadow-sm focus:border-fuchsia-500 outline-none font-medium transition-all" 
+              onKeyDown={handleKeyDown} 
+            />
+            <button 
+              onClick={handleAddAttribute} 
+              className="px-8 py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black active:scale-95 transition-all flex items-center gap-2"
+              disabled={!newAttribute.trim()}
+            > 
+              <span className="text-xl">+</span> Aggiungi
             </button>
           </div>
+          <div className="mt-3 text-sm text-slate-500">
+            Suggerimenti: aroma, sapore, texture, aftertaste, aspetto...
+          </div>
+        </div>
+        
+        <div className="space-y-6 mb-12">
+          {customAttributes.length === 0 ? (
+            <div className="text-center py-12">
+              <Layers size={64} className="mx-auto mb-6 text-slate-300" />
+              <h3 className="text-xl font-semibold text-slate-700 mb-2">Nessun attributo ancora creato</h3>
+              <p className="text-slate-500">Inizia aggiungendo degli attributi descrittivi usando il campo sopra.</p>
+            </div>
+          ) : (
+            <>
+              <h3 className="text-lg font-semibold text-slate-900">
+                Attributi Creati ({customAttributes.length})
+              </h3>
+              {customAttributes.map((attr, index) => {
+                const currentValue = result.qdaRatings?.[`${currentProduct.code}_${attr}`] || 0;
+                return (
+                  <div key={index} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-fuchsia-100 flex items-center justify-center text-fuchsia-700 font-bold">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <span className="text-lg font-bold text-slate-800">{attr}</span>
+                          <div className="flex items-center gap-2 text-sm text-slate-500">
+                            <div className={`w-2 h-2 rounded-full ${
+                              currentValue === 0 ? 'bg-slate-300' :
+                              currentValue <= 3 ? 'bg-green-500' :
+                              currentValue <= 6 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`} />
+                            {currentValue === 0 ? 'Non valutato' : `Intensità: ${currentValue}/10`}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveAttribute(index)}
+                        className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="space-y-4">
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="10" 
+                        step="0.5" 
+                        value={currentValue} 
+                        onChange={(e) => handleQdaChange(attr, parseFloat(e.target.value))} 
+                        className="w-full h-3 bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200 rounded-full appearance-none [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-fuchsia-500 [&::-webkit-slider-thumb]:shadow-lg" 
+                      />
+                      <div className="flex justify-between text-sm text-slate-500">
+                        <span>0 - Assente</span>
+                        <span className="font-bold">Valore: {currentValue}</span>
+                        <span>10 - Molto intenso</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+        
+        <div className="flex justify-center">
+          <button 
+            onClick={handleNextWithSave} 
+            className="px-12 py-5 bg-fuchsia-600 text-white rounded-2xl hover:bg-fuchsia-700 font-black shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95 uppercase tracking-widest"
+          > 
+            {currentProductIndex < products.length - 1 ? 'Salva e Prossimo' : 'Concludi Flash Profile'} 
+            <ArrowRight size={24} /> 
+          </button>
+        </div>
       </div>
-  )};
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-inter">
