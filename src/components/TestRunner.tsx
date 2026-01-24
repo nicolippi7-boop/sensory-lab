@@ -22,10 +22,8 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 };
 
 export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onComplete, onExit }) => {
-  // --- CHIAVE UNICA PER IL RECOVERY ---
   const STORAGE_KEY = `sensory_test_progress_${test.id}_${judgeName.replace(/\s+/g, '_')}`;
 
-  // --- STATO ---
   const [products, setProducts] = useState<Product[]>([]);
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
   const [result, setResult] = useState<Partial<JudgeResult>>({
@@ -40,7 +38,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     sortingGroups: {},
   });
 
-  // Stati specifici per i test
   const [selectedOne, setSelectedOne] = useState<string | null>(null);
   const [triangleStep, setTriangleStep] = useState<'selection' | 'forced_response' | 'details' | 'confirm'>('selection');
   const [triangleResponse, setTriangleResponse] = useState<TriangleResponse>({
@@ -62,7 +59,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [customAttributes, setCustomAttributes] = useState<string[]>([]);
   const [newAttribute, setNewAttribute] = useState('');
 
-  // --- LOGICA DI RECOVERY AL CARICAMENTO ---
   useEffect(() => {
     const savedData = localStorage.getItem(STORAGE_KEY);
     if (savedData) {
@@ -80,7 +76,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         console.error("Errore nel ripristino dei dati", e);
       }
     } else {
-      // Se non ci sono dati salvati, inizializza normalmente
       const initialProducts = test.config.randomizePresentation 
         ? shuffleArray(test.config.products) 
         : [...test.config.products];
@@ -88,7 +83,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   }, [test.id, STORAGE_KEY]);
 
-  // --- LOGICA DI SALVATAGGIO AUTOMATICO ---
   useEffect(() => {
     if (products.length > 0) {
       const stateToSave = {
@@ -105,56 +99,58 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   }, [products, currentProductIndex, result, triangleStep, triangleResponse, selectedOne, placedProducts, customAttributes, STORAGE_KEY]);
 
-  // --- TIMER LOGIC ---
+  // --- CORREZIONE LOGICA TIMER (TI & TDS) ---
+  useEffect(() => {
+    if (isTimerRunning) {
+      timerRef.current = window.setInterval(() => {
+        setElapsedTime(prev => prev + 0.1);
+      }, 100);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isTimerRunning]);
+
+  // Logica specifica per Time Intensity: registra il valore a intervalli regolari
   useEffect(() => {
     if (test.type === TestType.TIME_INTENSITY && isTimerRunning && products[currentProductIndex]) {
       const logKey = products[currentProductIndex].code;
-      const newEntry: TILogEntry = { 
-        time: parseFloat(elapsedTime.toFixed(1)), 
-        intensity: currentIntensity 
-      };
-      setTiHistory(prev => [...prev, { t: newEntry.time, v: currentIntensity }]);
-      setResult(prev => ({
+      const interval = window.setInterval(() => {
+        const newEntry: TILogEntry = { 
+          time: parseFloat(elapsedTime.toFixed(1)), 
+          intensity: currentIntensity 
+        };
+        setTiHistory(prev => [...prev, { t: newEntry.time, v: currentIntensity }]);
+        setResult(prev => ({
           ...prev,
           tiLogs: {
-              ...prev.tiLogs,
-              [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry]
+            ...prev.tiLogs,
+            [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry]
           }
-      }));
+        }));
+      }, 500); // Campionamento ogni 0.5s
+      return () => clearInterval(interval);
     }
-    
-    // Per TDS il timer serve solo per l'elapsed time visuale e log
-    if (test.type === TestType.TDS && isTimerRunning) {
-        timerRef.current = window.setInterval(() => {
-            setElapsedTime(prev => prev + 0.1);
-        }, 100);
-    } else if (test.type === TestType.TIME_INTENSITY && isTimerRunning) {
-        timerRef.current = window.setInterval(() => {
-             setElapsedTime(prev => prev + 0.5);
-        }, 500);
-    }
-
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [elapsedTime, isTimerRunning, test.type, currentProductIndex, currentIntensity, products]);
+  }, [isTimerRunning, currentIntensity, elapsedTime, test.type, currentProductIndex, products]);
 
   const startTimer = () => {
     setIsTimerRunning(true);
     setElapsedTime(0);
+    setTiHistory([]);
   };
 
   const stopTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
     setIsTimerRunning(false);
+    if (timerRef.current) clearInterval(timerRef.current);
   };
 
-  // --- HANDLERS ---
   const handleNextProduct = () => {
     if (currentProductIndex < products.length - 1) {
       setCurrentProductIndex(prev => prev + 1);
       stopTimer();
       setElapsedTime(0);
       setTiHistory([]);
-      setPlacedProducts([]); // Reset visuale parziale se necessario
+      setCurrentDominant(null);
       window.scrollTo(0, 0);
     } else {
       submitAll();
@@ -169,7 +165,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         triangleSelection: selectedOne || undefined,
         triangleResponse: test.type === TestType.TRIANGLE ? triangleResponse : undefined
     };
-    // Pulizia dopo il successo
     localStorage.removeItem(STORAGE_KEY);
     onComplete(finalResult);
   };
@@ -205,6 +200,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       }));
   };
 
+  // --- FIX TDS: Controllo esistenza array prima dello spread ---
   const handleDominantClick = (attrId: string) => {
     if (!isTimerRunning) return;
     setCurrentDominant(attrId);
@@ -213,13 +209,17 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       time: parseFloat(elapsedTime.toFixed(1)),
       attributeId: attrId
     };
-    setResult(prev => ({
-      ...prev,
-      tdsLogs: {
-        ...prev.tdsLogs,
-        [logKey]: [...(prev.tdsLogs?.[logKey] || []), newEntry]
-      }
-    }));
+    setResult(prev => {
+      const currentLogs = prev.tdsLogs || {};
+      const productLogs = currentLogs[logKey] || [];
+      return {
+        ...prev,
+        tdsLogs: {
+          ...currentLogs,
+          [logKey]: [...productLogs, newEntry]
+        }
+      };
+    });
   };
 
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -250,10 +250,10 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       }));
   };
 
-  // --- RENDERERS ---
-
   const currentProduct = products[currentProductIndex];
 
+  // --- RENDERERS (Triangle, QDA, CATA, etc. rimangono invariati come i tuoi blocchi) ---
+  
   const renderTriangle = () => {
     if (triangleStep === 'selection') {
       return (
@@ -458,7 +458,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         return (
             <div className="space-y-6">
                 <div className="relative h-12 flex items-center mt-12">
-                    {/* --- QUI C'È IL RIFERIMENTO ROSSO CHE VOLEVI --- */}
                     {attr.referenceValue !== undefined && (
                         <div 
                             className="absolute z-20 flex flex-col items-center pointer-events-none"
@@ -474,7 +473,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                             <div className="w-1 h-10 bg-red-500 rounded-full" />
                         </div>
                     )}
-                    
                     <input 
                         type="range" min={minVal} max={maxVal} step={step}
                         value={val}
@@ -519,7 +517,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             </div>
         );
     }
-
     return null;
   };
 
@@ -537,7 +534,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             <p className="text-lg font-bold text-indigo-900">{currentProductIndex + 1} / {products.length}</p>
         </div>
       </div>
-
       <div className="space-y-8">
         {test.config.attributes.map(attr => (
           <div key={attr.id} className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
@@ -556,7 +552,6 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           </div>
         ))}
       </div>
-
       <div className="mt-12 mb-32 flex justify-center">
         <button 
             onClick={handleNextProduct}
@@ -808,6 +803,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     </div>
   );
 
+  // --- CORREZIONE FLASH PROFILE: Accesso sicuro ai ratings ---
   const renderFlashProfile = () => (
       <div className="w-full max-w-3xl mx-auto animate-in fade-in">
          <div className="mb-12 p-10 bg-fuchsia-50 border-2 border-fuchsia-100 rounded-[48px] flex justify-between items-center shadow-lg">
