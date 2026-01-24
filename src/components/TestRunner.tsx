@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute, TriangleResponse } from '../types';
-import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers } from 'lucide-react';
+import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Eye, Grid, List, Tag, Star } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 interface TestRunnerProps {
@@ -60,6 +60,23 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [customAttributes, setCustomAttributes] = useState<string[]>([]);
   const [newAttribute, setNewAttribute] = useState('');
 
+  // Inizializza attributi da localStorage per Flash Profile
+  useEffect(() => {
+    if (test.type === TestType.FLASH_PROFILE) {
+      const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_attributes`);
+      if (savedAttrs) {
+        try {
+          const parsed = JSON.parse(savedAttrs);
+          if (Array.isArray(parsed)) {
+            setCustomAttributes(parsed);
+          }
+        } catch (e) {
+          console.error('Errore caricamento attributi salvati', e);
+        }
+      }
+    }
+  }, [test.id, test.type]);
+
   useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
         const initialProducts = test.config.randomizePresentation
@@ -107,10 +124,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   }, [test.id, test.config.products, test.config.randomizePresentation, test.type, test.config.attributes]);
 
   useEffect(() => {
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => { 
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
   }, []);
 
-  // CORREZIONE: Timer effect per TI e TDS
+  // Timer effect migliorato
   useEffect(() => {
     if (isTimerRunning) {
       timerRef.current = window.setInterval(() => {
@@ -118,7 +139,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           const newTime = prev + 0.1;
           const duration = test.config.durationSeconds || 60;
           if (newTime >= duration) {
-            stopTimer();
+            setIsTimerRunning(false);
+            if (timerRef.current) clearInterval(timerRef.current);
             return parseFloat(duration.toFixed(1));
           }
           return parseFloat(newTime.toFixed(1));
@@ -126,32 +148,42 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       }, 100);
     }
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
     };
   }, [isTimerRunning, test.config.durationSeconds]);
 
-  // CORREZIONE: TI Effect migliorato
+  // TI logging effect
   useEffect(() => {
-    if (test.type === TestType.TIME_INTENSITY && isTimerRunning && currentProduct) {
-      const currentTime = parseFloat(elapsedTime.toFixed(1));
-      const logKey = currentProduct.code;
-      const newEntry: TILogEntry = { time: currentTime, intensity: currentIntensity };
-     
-      setTiHistory(prev => {
-        // Rimuovi duplicati per lo stesso tempo (mantieni solo l'ultimo)
-        const filtered = prev.filter(p => Math.abs(p.t - currentTime) > 0.09);
-        return [...filtered, { t: currentTime, v: currentIntensity }];
-      });
-     
-      setResult(prev => ({
-        ...prev,
-        tiLogs: { 
-          ...prev.tiLogs, 
-          [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry] 
+    const logInterval = 0.5; // Log ogni 0.5 secondi
+    let lastLoggedTime = -logInterval;
+    
+    if (test.type === TestType.TIME_INTENSITY && isTimerRunning && products[currentProductIndex]) {
+      const checkAndLog = () => {
+        const currentTime = parseFloat(elapsedTime.toFixed(1));
+        if (currentTime >= lastLoggedTime + logInterval) {
+          const currentProduct = products[currentProductIndex];
+          const logKey = currentProduct.code;
+          const newEntry: TILogEntry = { time: currentTime, intensity: currentIntensity };
+         
+          setTiHistory(prev => [...prev, { t: currentTime, v: currentIntensity }]);
+         
+          setResult(prev => ({
+            ...prev,
+            tiLogs: { 
+              ...prev.tiLogs, 
+              [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry] 
+            }
+          }));
+          
+          lastLoggedTime = currentTime;
         }
-      }));
+      };
+      
+      checkAndLog();
     }
-  }, [elapsedTime, test.type, isTimerRunning, currentIntensity, currentProduct]);
+  }, [elapsedTime, test.type, isTimerRunning, currentProductIndex, products, currentIntensity]);
 
   const currentProduct = products[currentProductIndex];
 
@@ -162,7 +194,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       setIsTimerRunning(false);
       setElapsedTime(0);
       setCurrentDominant(null);
-      setCurrentIntensity(1); // CORREZIONE: Reset a 1 non 0
+      setCurrentIntensity(1);
       setTiHistory([]);
       if (timerRef.current) clearInterval(timerRef.current);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -201,13 +233,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }
   };
 
-  const submitAll = async () => {
+  const submitAll = () => {
     const finalResult: JudgeResult = {
-        ...result as JudgeResult,
-        id: generateId(),
-        submittedAt: new Date().toISOString(),
-        triangleSelection: selectedOne || undefined,
-        triangleResponse: test.type === TestType.TRIANGLE ? triangleResponse : undefined
+      ...result as JudgeResult,
+      id: generateId(),
+      submittedAt: new Date().toISOString(),
+      triangleSelection: selectedOne || undefined,
+      triangleResponse: test.type === TestType.TRIANGLE ? triangleResponse : undefined,
+      pairedSelection: test.type === TestType.PAIRED_COMPARISON ? selectedOne || '' : undefined
     };
     onComplete(finalResult);
   };
@@ -230,15 +263,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   };
 
   const handleRataChange = (attrId: string, intensity: number) => {
-      if (!currentProduct) return;
-      const key = `${currentProduct.code}_${attrId}`;
-      setResult(prev => ({ ...prev, rataSelection: { ...prev.rataSelection, [key]: intensity } }));
+    if (!currentProduct) return;
+    const key = `${currentProduct.code}_${attrId}`;
+    setResult(prev => ({ ...prev, rataSelection: { ...prev.rataSelection, [key]: intensity } }));
   };
 
   const startTimer = () => {
     setIsTimerRunning(true);
     setElapsedTime(0);
-    setTiHistory([]);
     if (test.type === TestType.TDS && currentProduct) {
       setResult(prev => {
         const logKey = currentProduct.code;
@@ -269,7 +301,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         updatedLogs.unshift(startEntry);
       }
      
-      if (!hasEnd) {
+      if (!hasEnd && elapsedTime > 0) {
         const endEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: 'END' };
         updatedLogs.push(endEntry);
       }
@@ -288,23 +320,1294 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     const logKey = currentProduct.code;
     const currentLogs = result.tdsLogs?.[logKey] || [];
     const newEntry: TDSLogEntry = { time: parseFloat(elapsedTime.toFixed(1)), attributeId: attrId };
-    setResult(prev => ({ ...prev, tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, newEntry] } }));
+    setResult(prev => ({ 
+      ...prev, 
+      tdsLogs: { ...prev.tdsLogs, [logKey]: [...currentLogs, newEntry] } 
+    }));
   };
 
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!selectedOne) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      const clampedX = Math.max(0, Math.min(100, x));
-      const clampedY = Math.max(0, Math.min(100, y));
-      setResult(prev => ({ ...prev, nappingData: { ...prev.nappingData, [selectedOne]: { x: clampedX, y: clampedY } } }));
-      if (!placedProducts.includes(selectedOne)) { setPlacedProducts([...placedProducts, selectedOne]); }
-      setSelectedOne(null);
+    if (!selectedOne) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const clampedX = Math.max(0, Math.min(100, x));
+    const clampedY = Math.max(0, Math.min(100, y));
+    setResult(prev => ({ 
+      ...prev, 
+      nappingData: { 
+        ...prev.nappingData, 
+        [selectedOne]: { x: clampedX, y: clampedY } 
+      } 
+    }));
+    if (!placedProducts.includes(selectedOne)) { 
+      setPlacedProducts([...placedProducts, selectedOne]); 
+    }
+    setSelectedOne(null);
   };
 
   const handleSortChange = (prodCode: string, group: string) => {
-      setResult(prev => ({ ...prev, sortingGroups: { ...prev.sortingGroups, [prodCode]: group } }));
+    setResult(prev => ({ 
+      ...prev, 
+      sortingGroups: { ...prev.sortingGroups, [prodCode]: group } 
+    }));
+  };
+
+  // ================ RENDER FUNCTIONS ================
+
+  const renderHedonic = () => {
+    if (!currentProduct) return null;
+    return (
+      <div className="max-w-2xl mx-auto w-full animate-in fade-in duration-500">
+        <div className="mb-8 p-6 bg-pink-50 border border-pink-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div>
+            <p className="text-sm text-pink-600 font-bold uppercase tracking-widest mb-1">Campione</p>
+            <p className="text-5xl font-black text-pink-900 font-mono tracking-tighter">{currentProduct.code}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-pink-400 font-bold uppercase mb-1">Progresso</p>
+            <p className="text-lg font-bold text-pink-900">{currentProductIndex + 1} / {products.length}</p>
+          </div>
+        </div>
+        
+        <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-200">
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 mb-3">Valutazione Edonica</h2>
+            <p className="text-slate-600 text-lg">Quanto ti piace questo prodotto?</p>
+          </div>
+          
+          <div className="space-y-8">
+            {test.config.attributes.map((attr, index) => {
+              const key = `${currentProduct.code}_${attr.id}`;
+              const value = (result.qdaRatings || {})[key] ?? 5;
+              
+              return (
+                <div key={attr.id} className="bg-pink-50 p-8 rounded-3xl border border-pink-100">
+                  <div className="mb-6 text-center">
+                    <h3 className="text-2xl font-black text-slate-900 mb-2">{attr.name}</h3>
+                    {attr.description && <p className="text-slate-600 italic">{attr.description}</p>}
+                  </div>
+                  
+                  {/* Scala Edonica 9 punti */}
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center px-4">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                        <button
+                          key={num}
+                          onClick={() => handleQdaChange(attr.id, num)}
+                          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${
+                            value === num 
+                              ? 'bg-pink-600 text-white scale-110 shadow-lg' 
+                              : 'bg-white text-slate-700 hover:bg-pink-50'
+                          }`}
+                        >
+                          <span className="text-xl font-black">{num}</span>
+                          {num === 1 && <span className="text-xs font-bold">Estremamente<br/>dispiaciuto</span>}
+                          {num === 5 && <span className="text-xs font-bold">Né piace<br/>né dispiace</span>}
+                          {num === 9 && <span className="text-xs font-bold">Estremamente<br/>soddisfatto</span>}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    <div className="text-center">
+                      <div className="text-5xl font-black text-pink-600 mb-2">{value}</div>
+                      <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">
+                        {value === 1 && "DISGUSTOSO"}
+                        {value === 9 && "ECCELLENTE"}
+                        {value === 5 && "NEUTRO"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          <div className="mt-12 mb-32 flex justify-center">
+            <button onClick={handleNextProduct} className="px-12 py-5 bg-pink-600 text-white font-black rounded-3xl hover:bg-pink-700 shadow-xl shadow-pink-100 transition-all flex items-center gap-3 text-xl active:scale-95 group">
+              {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'}
+              <ArrowRight size={28} className="group-hover:translate-x-2 transition-transform" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFlashProfile = () => {
+    const [draggingAttr, setDraggingAttr] = useState<string | null>(null);
+    const [sortingMode, setSortingMode] = useState<'grid' | 'list'>('grid');
+    
+    const handleAddCustomAttribute = () => {
+      if (newAttribute.trim() && !customAttributes.includes(newAttribute.trim())) {
+        const newAttrs = [...customAttributes, newAttribute.trim()];
+        setCustomAttributes(newAttrs);
+        localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(newAttrs));
+        setNewAttribute('');
+      }
+    };
+    
+    const handleRemoveAttribute = (attr: string) => {
+      const newAttrs = customAttributes.filter(a => a !== attr);
+      setCustomAttributes(newAttrs);
+      localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(newAttrs));
+    };
+    
+    const handleDragStart = (attr: string) => {
+      setDraggingAttr(attr);
+    };
+    
+    const handleDrop = (prodCode: string) => {
+      if (draggingAttr) {
+        const key = `${prodCode}_${draggingAttr}`;
+        setResult(prev => ({
+          ...prev,
+          qdaRatings: { 
+            ...prev.qdaRatings, 
+            [key]: prev.qdaRatings?.[key] || 50 
+          }
+        }));
+      }
+    };
+    
+    const handleIntensityChange = (prodCode: string, attr: string, value: number) => {
+      const key = `${prodCode}_${attr}`;
+      setResult(prev => ({
+        ...prev,
+        qdaRatings: { ...prev.qdaRatings, [key]: value }
+      }));
+    };
+    
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8 p-6 bg-purple-50 border border-purple-100 rounded-3xl shadow-sm">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-purple-600 font-bold uppercase tracking-widest mb-1">Flash Profile</p>
+              <p className="text-3xl font-black text-purple-900">Associa e valuta gli attributi</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-purple-400 font-bold uppercase mb-1">Progresso</p>
+              <p className="text-lg font-bold text-purple-900">{currentProductIndex + 1} / {products.length}</p>
+            </div>
+          </div>
+          <p className="text-slate-600 mt-4">Trascina gli attributi sui campioni e regola l'intensità</p>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Pannello Attributi */}
+          <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-200">
+            <div className="flex items-center gap-3 mb-6">
+              <Tag className="text-purple-600" size={24} />
+              <h3 className="text-xl font-black text-slate-900">I Tuoi Attributi</h3>
+            </div>
+            
+            <div className="mb-6">
+              <div className="flex gap-2 mb-4">
+                <input
+                  value={newAttribute}
+                  onChange={(e) => setNewAttribute(e.target.value)}
+                  placeholder="Nuovo attributo..."
+                  className="flex-1 p-3 border border-slate-300 rounded-xl"
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddCustomAttribute()}
+                />
+                <button 
+                  onClick={handleAddCustomAttribute}
+                  className="px-4 py-3 bg-purple-600 text-white rounded-xl font-bold"
+                >
+                  Aggiungi
+                </button>
+              </div>
+              
+              <div className="flex gap-2 mb-6">
+                <button 
+                  onClick={() => setSortingMode('grid')}
+                  className={`flex-1 py-2 rounded-xl ${sortingMode === 'grid' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}
+                >
+                  Griglia
+                </button>
+                <button 
+                  onClick={() => setSortingMode('list')}
+                  className={`flex-1 py-2 rounded-xl ${sortingMode === 'list' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}
+                >
+                  Lista
+                </button>
+              </div>
+            </div>
+            
+            <div className={`space-y-2 ${sortingMode === 'grid' ? 'grid grid-cols-2 gap-2' : ''}`}>
+              {customAttributes.map((attr, idx) => (
+                <div
+                  key={idx}
+                  draggable
+                  onDragStart={() => handleDragStart(attr)}
+                  className={`p-3 rounded-xl border-2 border-dashed cursor-grab active:cursor-grabbing ${
+                    sortingMode === 'grid' 
+                      ? 'text-center bg-purple-50 border-purple-200' 
+                      : 'flex justify-between items-center bg-white border-slate-200'
+                  }`}
+                >
+                  <span className="font-bold text-slate-800">{attr}</span>
+                  <button 
+                    onClick={() => handleRemoveAttribute(attr)}
+                    className="text-slate-400 hover:text-red-500"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {customAttributes.length === 0 && (
+                <div className="text-center p-8 text-slate-400 border-2 border-dashed border-slate-300 rounded-xl">
+                  <p className="font-bold mb-2">Nessun attributo</p>
+                  <p className="text-sm">Aggiungi attributi personalizzati per descrivere i campioni</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Area Campioni */}
+          <div className="lg:col-span-2">
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 mb-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Layers className="text-purple-600" size={24} />
+                <h3 className="text-xl font-black text-slate-900">Campioni</h3>
+              </div>
+              
+              <div className="space-y-8">
+                {products.map((product) => {
+                  const productAttrs = customAttributes.filter(attr => {
+                    const key = `${product.code}_${attr}`;
+                    return result.qdaRatings?.[key] !== undefined;
+                  });
+                  
+                  return (
+                    <div 
+                      key={product.id}
+                      className="p-6 rounded-2xl border-2 border-slate-100 hover:border-purple-200 transition-all"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleDrop(product.code)}
+                    >
+                      <div className="flex justify-between items-start mb-6">
+                        <div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-700 font-black text-xl">
+                              {product.code}
+                            </div>
+                            <div>
+                              <h4 className="text-2xl font-black text-slate-900">{product.name}</h4>
+                              <p className="text-slate-500 text-sm">{productAttrs.length} attributi assegnati</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1">
+                            Trascina qui
+                          </div>
+                          <div className="text-2xl font-black text-slate-900">
+                            {productAttrs.length}/{customAttributes.length}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {productAttrs.length > 0 ? (
+                        <div className="space-y-4">
+                          {productAttrs.map((attr) => {
+                            const key = `${product.code}_${attr}`;
+                            const value = result.qdaRatings?.[key] || 50;
+                            
+                            return (
+                              <div key={key} className="bg-purple-50 p-4 rounded-xl">
+                                <div className="flex justify-between items-center mb-3">
+                                  <span className="font-bold text-purple-800">{attr}</span>
+                                  <button 
+                                    onClick={() => handleIntensityChange(product.code, attr, 0)}
+                                    className="text-slate-400 hover:text-red-500 text-sm"
+                                  >
+                                    Rimuovi
+                                  </button>
+                                </div>
+                                
+                                <div className="flex items-center gap-4">
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={value}
+                                    onChange={(e) => handleIntensityChange(product.code, attr, parseInt(e.target.value))}
+                                    className="flex-1 h-3 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                  />
+                                  <div className="w-16 text-center">
+                                    <span className="text-2xl font-black text-purple-700">{value}</span>
+                                    <div className="text-[10px] text-slate-500">/100</div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex justify-between text-xs text-slate-500 mt-2">
+                                  <span>Debole</span>
+                                  <span>Forte</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div 
+                          className="h-32 border-4 border-dashed border-slate-300 rounded-2xl flex items-center justify-center text-slate-400"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => handleDrop(product.code)}
+                        >
+                          <div className="text-center">
+                            <p className="font-bold mb-2">Trascina attributi qui</p>
+                            <p className="text-sm">Oppure clicca e trascina dagli attributi a sinistra</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="flex justify-between">
+              <button
+                onClick={() => {
+                  if (confirm("Vuoi resettare tutti gli attributi?")) {
+                    setCustomAttributes([]);
+                    localStorage.removeItem(`flashProfile_${test.id}_attributes`);
+                    setResult(prev => ({ ...prev, qdaRatings: {} }));
+                  }
+                }}
+                className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+              >
+                Reset
+              </button>
+              
+              <button 
+                onClick={handleNextProduct}
+                className="px-8 py-4 bg-purple-600 text-white font-black rounded-2xl hover:bg-purple-700 shadow-lg"
+              >
+                {currentProductIndex < products.length - 1 ? 'Continua' : 'Completa Test'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTDS = () => {
+    if (!currentProduct) return null;
+    
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8 p-6 bg-emerald-50 border border-emerald-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div>
+            <p className="text-sm text-emerald-600 font-bold uppercase tracking-widest mb-1">TDS - Dominanza Temporale</p>
+            <p className="text-3xl font-black text-emerald-900">Campione: {currentProduct.code}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-emerald-400 font-bold uppercase mb-1">Timer</div>
+            <div className="text-3xl font-black text-emerald-900">{elapsedTime.toFixed(1)}s</div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 mb-8">
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 mb-3">Seleziona il sentore dominante</h2>
+            <p className="text-slate-600">Clicca sugli attributi quando diventano dominanti durante l'assaggio</p>
+          </div>
+          
+          <div className="mb-8">
+            <div className="flex justify-center gap-4 mb-6">
+              <button
+                onClick={startTimer}
+                disabled={isTimerRunning}
+                className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+              >
+                <Play size={20} /> {isTimerRunning ? 'In corso...' : 'Inizia Assaggio'}
+              </button>
+              <button
+                onClick={stopTimer}
+                disabled={!isTimerRunning}
+                className="px-8 py-4 bg-red-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+              >
+                <Square size={20} /> Ferma
+              </button>
+            </div>
+            
+            {isTimerRunning && (
+              <div className="text-center mb-6">
+                <div className="inline-block bg-emerald-100 px-4 py-2 rounded-full">
+                  <span className="text-emerald-700 font-bold">⏱️ Timer attivo - Clicca gli attributi dominanti</span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {test.config.attributes.map((attr) => (
+              <button
+                key={attr.id}
+                onClick={() => handleDominantClick(attr.id)}
+                disabled={!isTimerRunning}
+                className={`p-6 rounded-2xl border-2 font-bold text-lg transition-all ${
+                  currentDominant === attr.id
+                    ? 'bg-emerald-600 border-emerald-600 text-white scale-105 shadow-lg'
+                    : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-300 disabled:opacity-50'
+                }`}
+              >
+                {attr.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="flex justify-between">
+          <button
+            onClick={() => {
+              if (confirm("Vuoi resettare i log per questo campione?")) {
+                setCurrentDominant(null);
+                setElapsedTime(0);
+                setIsTimerRunning(false);
+                if (timerRef.current) clearInterval(timerRef.current);
+                const logKey = currentProduct.code;
+                setResult(prev => ({
+                  ...prev,
+                  tdsLogs: { ...prev.tdsLogs, [logKey]: [] }
+                }));
+              }
+            }}
+            className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+          >
+            Reset
+          </button>
+          
+          <button 
+            onClick={handleNextProduct}
+            className="px-8 py-4 bg-emerald-600 text-white font-black rounded-2xl hover:bg-emerald-700 shadow-lg"
+          >
+            {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Completa Test'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTimeIntensity = () => {
+    if (!currentProduct) return null;
+    
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8 p-6 bg-blue-50 border border-blue-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div>
+            <p className="text-sm text-blue-600 font-bold uppercase tracking-widest mb-1">Time Intensity</p>
+            <p className="text-3xl font-black text-blue-900">Campione: {currentProduct.code}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-blue-400 font-bold uppercase mb-1">Timer</div>
+            <div className="text-3xl font-black text-blue-900">{elapsedTime.toFixed(1)}s</div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 mb-8">
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 mb-3">Traccia l'intensità nel tempo</h2>
+            <p className="text-slate-600">Regola lo slider mentre assaggi per tracciare l'evoluzione dell'intensità</p>
+          </div>
+          
+          <div className="mb-8">
+            <div className="flex justify-center gap-4 mb-6">
+              <button
+                onClick={startTimer}
+                disabled={isTimerRunning}
+                className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+              >
+                <Play size={20} /> {isTimerRunning ? 'Tracciamento attivo...' : 'Inizia Tracciamento'}
+              </button>
+              <button
+                onClick={stopTimer}
+                disabled={!isTimerRunning}
+                className="px-8 py-4 bg-red-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+              >
+                <Square size={20} /> Ferma
+              </button>
+            </div>
+          </div>
+          
+          {/* Slider per intensità */}
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <label className="text-lg font-bold text-slate-700">Intensità corrente:</label>
+              <div className="text-3xl font-black text-blue-600">{currentIntensity}</div>
+            </div>
+            
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={currentIntensity}
+              onChange={(e) => setCurrentIntensity(parseInt(e.target.value))}
+              className="w-full h-4 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              disabled={!isTimerRunning}
+            />
+            
+            <div className="flex justify-between text-sm text-slate-500 mt-2">
+              <span>0 - Percepibile</span>
+              <span>100 - Massima</span>
+            </div>
+          </div>
+          
+          {/* Grafico storico (semplificato) */}
+          {tiHistory.length > 0 && (
+            <div className="bg-slate-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-slate-800 mb-4">Andamento registrato:</h3>
+              <div className="h-32 relative">
+                <div className="absolute inset-0 flex items-end">
+                  {tiHistory.map((point, index) => (
+                    <div
+                      key={index}
+                      className="absolute bottom-0 w-2 bg-blue-600 rounded-t"
+                      style={{
+                        left: `${(point.t / (test.config.durationSeconds || 60)) * 100}%`,
+                        height: `${point.v}%`
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex justify-between">
+          <button
+            onClick={() => {
+              setTiHistory([]);
+              setCurrentIntensity(1);
+              setElapsedTime(0);
+              setIsTimerRunning(false);
+              if (timerRef.current) clearInterval(timerRef.current);
+              const logKey = currentProduct.code;
+              setResult(prev => ({
+                ...prev,
+                tiLogs: { ...prev.tiLogs, [logKey]: [] }
+              }));
+            }}
+            className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+          >
+            Reset
+          </button>
+          
+          <button 
+            onClick={handleNextProduct}
+            className="px-8 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 shadow-lg"
+          >
+            {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Completa Test'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCATA = () => {
+    if (!currentProduct) return null;
+    
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-8 p-6 bg-orange-50 border border-orange-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div>
+            <p className="text-sm text-orange-600 font-bold uppercase tracking-widest mb-1">CATA - Check All That Apply</p>
+            <p className="text-3xl font-black text-orange-900">Campione: {currentProduct.code}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-orange-400 font-bold uppercase mb-1">Progresso</p>
+            <p className="text-lg font-bold text-orange-900">{currentProductIndex + 1} / {products.length}</p>
+          </div>
+        </div>
+        
+        <div className="bg-white p-8 rounded-3xl border border-slate-200">
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 mb-3">Seleziona tutti i descrittori applicabili</h2>
+            <p className="text-slate-600">Clicca su tutti gli attributi che descrivono questo campione</p>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {test.config.attributes.map((attr) => {
+              const key = `${currentProduct.code}_${attr.id}`;
+              const isSelected = result.cataSelection?.includes(key) || false;
+              
+              return (
+                <button
+                  key={attr.id}
+                  onClick={() => handleCataToggle(attr.id)}
+                  className={`p-6 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${
+                    isSelected
+                      ? 'bg-orange-600 border-orange-600 text-white shadow-lg'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-orange-300'
+                  }`}
+                >
+                  {isSelected ? (
+                    <CheckCircle size={24} className="text-white" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full border-2 border-slate-300" />
+                  )}
+                  <span className="font-bold text-lg">{attr.name}</span>
+                  {attr.description && (
+                    <span className="text-sm opacity-80 mt-2">{attr.description}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          
+          <div className="mt-12 text-center">
+            <div className="inline-block bg-orange-50 px-6 py-3 rounded-full mb-6">
+              <span className="text-orange-700 font-bold">
+                {result.cataSelection?.filter(k => k.startsWith(currentProduct.code)).length || 0} attributi selezionati
+              </span>
+            </div>
+            
+            <button 
+              onClick={handleNextProduct}
+              className="px-12 py-5 bg-orange-600 text-white font-black rounded-2xl hover:bg-orange-700 shadow-xl transition-all flex items-center gap-3 text-xl mx-auto"
+            >
+              {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'}
+              <ArrowRight size={28} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRATA = () => {
+    if (!currentProduct) return null;
+    
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-8 p-6 bg-rose-50 border border-rose-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div>
+            <p className="text-sm text-rose-600 font-bold uppercase tracking-widest mb-1">RATA - Rate All That Apply</p>
+            <p className="text-3xl font-black text-rose-900">Campione: {currentProduct.code}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-rose-400 font-bold uppercase mb-1">Progresso</p>
+            <p className="text-lg font-bold text-rose-900">{currentProductIndex + 1} / {products.length}</p>
+          </div>
+        </div>
+        
+        <div className="bg-white p-8 rounded-3xl border border-slate-200">
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 mb-3">Seleziona e valuta i descrittori</h2>
+            <p className="text-slate-600">Scegli gli attributi applicabili e valuta la loro intensità</p>
+          </div>
+          
+          <div className="space-y-8">
+            {test.config.attributes.map((attr) => {
+              const key = `${currentProduct.code}_${attr.id}`;
+              const intensity = result.rataSelection?.[key] || 0;
+              const isSelected = intensity > 0;
+              
+              return (
+                <div key={attr.id} className="p-6 rounded-2xl border-2 border-slate-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">{attr.name}</h3>
+                      {attr.description && (
+                        <p className="text-slate-600 text-sm mt-1">{attr.description}</p>
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={() => handleRataChange(attr.id, isSelected ? 0 : 50)}
+                      className={`px-4 py-2 rounded-xl font-bold ${
+                        isSelected
+                          ? 'bg-rose-100 text-rose-700'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {isSelected ? 'Selezionato' : 'Seleziona'}
+                    </button>
+                  </div>
+                  
+                  {isSelected && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={intensity}
+                          onChange={(e) => handleRataChange(attr.id, parseInt(e.target.value))}
+                          className="flex-1 h-3 bg-rose-200 rounded-lg appearance-none cursor-pointer accent-rose-600"
+                        />
+                        <div className="w-16 text-center">
+                          <span className="text-2xl font-black text-rose-700">{intensity}</span>
+                          <div className="text-[10px] text-slate-500">/100</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Debole</span>
+                        <span>Forte</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          <div className="mt-12 text-center">
+            <button 
+              onClick={handleNextProduct}
+              className="px-12 py-5 bg-rose-600 text-white font-black rounded-2xl hover:bg-rose-700 shadow-xl transition-all flex items-center gap-3 text-xl mx-auto"
+            >
+              {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'}
+              <ArrowRight size={28} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderNapping = () => {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8 p-6 bg-cyan-50 border border-cyan-100 rounded-3xl shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <p className="text-sm text-cyan-600 font-bold uppercase tracking-widest mb-1">Napping Sensoriale</p>
+              <p className="text-3xl font-black text-cyan-900">Posiziona i campioni sulla mappa</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-cyan-400 font-bold uppercase mb-1">Posizionati</p>
+              <p className="text-lg font-bold text-cyan-900">{placedProducts.length} / {products.length}</p>
+            </div>
+          </div>
+          <p className="text-slate-600">Clicca su un campione e poi sulla mappa per posizionarlo</p>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Legenda Campioni */}
+          <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-200">
+            <div className="flex items-center gap-3 mb-6">
+              <Layers className="text-cyan-600" size={24} />
+              <h3 className="text-xl font-black text-slate-900">Campioni</h3>
+            </div>
+            
+            <div className="space-y-3">
+              {products.map((product) => {
+                const isPlaced = placedProducts.includes(product.code);
+                const isSelected = selectedOne === product.code;
+                const position = result.nappingData?.[product.code];
+                
+                return (
+                  <button
+                    key={product.id}
+                    onClick={() => setSelectedOne(product.code)}
+                    disabled={isPlaced}
+                    className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${
+                      isSelected
+                        ? 'border-cyan-600 bg-cyan-50'
+                        : isPlaced
+                        ? 'border-green-200 bg-green-50 opacity-70'
+                        : 'border-slate-200 hover:border-cyan-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-black text-slate-900 text-lg">{product.name}</div>
+                        <div className="text-slate-500 text-sm font-mono">{product.code}</div>
+                      </div>
+                      
+                      {isPlaced && position && (
+                        <div className="text-right">
+                          <div className="text-xs font-bold text-green-600">Posizionato</div>
+                          <div className="text-xs text-slate-500">
+                            ({position.x.toFixed(0)}, {position.y.toFixed(0)})
+                          </div>
+                        </div>
+                      )}
+                      
+                      {!isPlaced && (
+                        <div className="text-slate-400 text-xs font-bold">Clicca per selezionare</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="mt-8 p-4 bg-slate-50 rounded-2xl">
+              <div className="flex items-center gap-3 mb-3">
+                <MousePointer2 className="text-cyan-600" size={20} />
+                <h4 className="font-bold text-slate-800">Istruzioni</h4>
+              </div>
+              <ol className="text-sm text-slate-600 space-y-2">
+                <li>1. Seleziona un campione dalla lista</li>
+                <li>2. Clicca sulla mappa per posizionarlo</li>
+                <li>3. I campioni simili vanno vicini</li>
+                <li>4. I campioni diversi vanno lontani</li>
+              </ol>
+            </div>
+          </div>
+          
+          {/* Mappa */}
+          <div className="lg:col-span-2">
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 h-full">
+              <div className="flex items-center gap-3 mb-6">
+                <MapPin className="text-cyan-600" size={24} />
+                <h3 className="text-xl font-black text-slate-900">Mappa Sensoriale</h3>
+              </div>
+              
+              <div className="relative aspect-square w-full border-4 border-slate-200 rounded-3xl bg-gradient-to-br from-cyan-50/50 to-white overflow-hidden">
+                {/* Area cliccabile */}
+                <div 
+                  className="absolute inset-0 cursor-crosshair"
+                  onClick={handleMapClick}
+                />
+                
+                {/* Griglia */}
+                <div className="absolute inset-0 grid grid-cols-10 grid-rows-10">
+                  {Array.from({ length: 100 }).map((_, i) => (
+                    <div key={i} className="border border-slate-100" />
+                  ))}
+                </div>
+                
+                {/* Campioni posizionati */}
+                {Object.entries(result.nappingData || {}).map(([code, pos]) => (
+                  <div
+                    key={code}
+                    className="absolute w-20 h-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-cyan-600 bg-white shadow-xl flex items-center justify-center"
+                    style={{
+                      left: `${pos.x}%`,
+                      top: `${pos.y}%`
+                    }}
+                  >
+                    <div className="text-center">
+                      <div className="font-black text-slate-900 text-lg">{code}</div>
+                      <div className="text-xs text-slate-500 font-bold">
+                        ({pos.x.toFixed(0)}, {pos.y.toFixed(0)})
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Istruzioni */}
+                {selectedOne && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-600 text-white px-6 py-3 rounded-full shadow-lg">
+                    <div className="flex items-center gap-2 font-bold">
+                      <MousePointer2 size={20} />
+                      Clicca sulla mappa per posizionare: {selectedOne}
+                    </div>
+                  </div>
+                )}
+                
+                {!selectedOne && placedProducts.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-400">
+                    <div className="text-center">
+                      <MousePointer2 size={48} className="mx-auto mb-4 opacity-50" />
+                      <p className="text-xl font-bold mb-2">Seleziona un campione dalla lista</p>
+                      <p className="text-sm">Poi clicca sulla mappa per posizionarlo</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Coordinate */}
+              <div className="flex justify-between text-xs text-slate-500 mt-4 px-2">
+                <span>↑ Basso / Sinistra</span>
+                <span>↓ Alto / Destra</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-8 flex justify-between">
+          <button
+            onClick={() => {
+              if (confirm("Vuoi resettare tutte le posizioni?")) {
+                setPlacedProducts([]);
+                setSelectedOne(null);
+                setResult(prev => ({ ...prev, nappingData: {} }));
+              }
+            }}
+            className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+          >
+            Reset Mappa
+          </button>
+          
+          <button 
+            onClick={handleNextProduct}
+            disabled={placedProducts.length < products.length}
+            className="px-8 py-4 bg-cyan-600 text-white font-black rounded-2xl hover:bg-cyan-700 shadow-lg disabled:opacity-50"
+          >
+            {currentProductIndex < products.length - 1 ? 'Prossimo Set' : 'Completa Test'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSorting = () => {
+    const [newGroupName, setNewGroupName] = useState('');
+    const [groups, setGroups] = useState<string[]>(['Gruppo A', 'Gruppo B', 'Gruppo C']);
+    
+    const handleAddGroup = () => {
+      if (newGroupName.trim() && !groups.includes(newGroupName.trim())) {
+        setGroups([...groups, newGroupName.trim()]);
+        setNewGroupName('');
+      }
+    };
+    
+    const handleRemoveGroup = (group: string) => {
+      if (window.confirm(`Rimuovere il gruppo "${group}"? I campioni assegnati verranno sbloccati.`)) {
+        const newGroups = groups.filter(g => g !== group);
+        setGroups(newGroups);
+        
+        // Rimuovi assegnazioni per questo gruppo
+        const updatedGroups = { ...result.sortingGroups };
+        Object.keys(updatedGroups).forEach(code => {
+          if (updatedGroups[code] === group) {
+            delete updatedGroups[code];
+          }
+        });
+        setResult(prev => ({ ...prev, sortingGroups: updatedGroups }));
+      }
+    };
+    
+    const getProductsByGroup = (group: string) => {
+      return products.filter(product => result.sortingGroups?.[product.code] === group);
+    };
+    
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8 p-6 bg-violet-50 border border-violet-100 rounded-3xl shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <p className="text-sm text-violet-600 font-bold uppercase tracking-widest mb-1">Sorting - Raggruppamento</p>
+              <p className="text-3xl font-black text-violet-900">Raggruppa i campioni simili</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-violet-400 font-bold uppercase mb-1">Assegnati</p>
+              <p className="text-lg font-bold text-violet-900">
+                {Object.keys(result.sortingGroups || {}).length} / {products.length}
+              </p>
+            </div>
+          </div>
+          <p className="text-slate-600">Trascina i campioni nei gruppi o crea nuovi gruppi per i campioni simili</p>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Pannello Gruppi */}
+          <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-200">
+            <div className="flex items-center gap-3 mb-6">
+              <Grid className="text-violet-600" size={24} />
+              <h3 className="text-xl font-black text-slate-900">Gruppi</h3>
+            </div>
+            
+            <div className="mb-6">
+              <div className="flex gap-2 mb-4">
+                <input
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="Nuovo gruppo..."
+                  className="flex-1 p-3 border border-slate-300 rounded-xl"
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddGroup()}
+                />
+                <button 
+                  onClick={handleAddGroup}
+                  className="px-4 py-3 bg-violet-600 text-white rounded-xl font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {groups.map((group) => {
+                const groupProducts = getProductsByGroup(group);
+                
+                return (
+                  <div
+                    key={group}
+                    className="p-4 rounded-2xl border-2 border-violet-100 bg-violet-50"
+                  >
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-bold text-violet-800 text-lg">{group}</h4>
+                      <div className="flex gap-2">
+                        <span className="bg-violet-100 text-violet-700 text-xs font-bold px-2 py-1 rounded-full">
+                          {groupProducts.length}
+                        </span>
+                        <button
+                          onClick={() => handleRemoveGroup(group)}
+                          className="text-violet-400 hover:text-red-500"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="min-h-[60px] p-3 bg-white rounded-xl border border-violet-200">
+                      {groupProducts.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {groupProducts.map((product) => (
+                            <div
+                              key={product.id}
+                              className="px-3 py-1 bg-violet-100 text-violet-700 rounded-full text-sm font-bold flex items-center gap-1"
+                            >
+                              {product.code}
+                              <button
+                                onClick={() => handleSortChange(product.code, '')}
+                                className="text-violet-400 hover:text-violet-700"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-slate-400 text-sm py-4">
+                          Trascina qui i campioni
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {groups.length === 0 && (
+                <div className="text-center p-8 text-slate-400 border-2 border-dashed border-slate-300 rounded-xl">
+                  <p className="font-bold mb-2">Nessun gruppo</p>
+                  <p className="text-sm">Crea gruppi per iniziare a classificare</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Area Campioni */}
+          <div className="lg:col-span-2">
+            <div className="bg-white p-6 rounded-3xl border border-slate-200">
+              <div className="flex items-center gap-3 mb-6">
+                <Layers className="text-violet-600" size={24} />
+                <h3 className="text-xl font-black text-slate-900">Campioni da Classificare</h3>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {products.map((product) => {
+                  const assignedGroup = result.sortingGroups?.[product.code];
+                  const isAssigned = !!assignedGroup;
+                  
+                  return (
+                    <div
+                      key={product.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('productCode', product.code);
+                      }}
+                      className={`p-4 rounded-2xl border-2 text-center cursor-move transition-all ${
+                        isAssigned
+                          ? 'border-green-300 bg-green-50 opacity-70'
+                          : 'border-slate-200 hover:border-violet-300 bg-white'
+                      }`}
+                    >
+                      <div className="font-black text-slate-900 text-xl mb-2">{product.code}</div>
+                      <div className="text-slate-600 text-sm mb-3">{product.name}</div>
+                      
+                      {isAssigned ? (
+                        <div className="text-xs">
+                          <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">
+                            {assignedGroup}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400">Trascina in un gruppo</div>
+                      )}
+                      
+                      {isAssigned && (
+                        <button
+                          onClick={() => handleSortChange(product.code, '')}
+                          className="mt-3 text-xs text-slate-400 hover:text-red-500"
+                        >
+                          Rimuovi
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Istruzioni drag & drop */}
+              <div className="mt-8 p-4 bg-slate-50 rounded-2xl">
+                <div className="flex items-center gap-3 mb-3">
+                  <MousePointer2 className="text-violet-600" size={20} />
+                  <h4 className="font-bold text-slate-800">Come classificare</h4>
+                </div>
+                <ol className="text-sm text-slate-600 space-y-2">
+                  <li>1. Clicca e trascina i campioni nei gruppi</li>
+                  <li>2. I campioni simili vanno nello stesso gruppo</li>
+                  <li>3. Crea nuovi gruppi se necessario</li>
+                  <li>4. I campioni diversi vanno in gruppi diversi</li>
+                </ol>
+              </div>
+            </div>
+            
+            {/* Gestione drag & drop */}
+            <div className="grid grid-cols-3 gap-4 mt-6">
+              {groups.map((group) => (
+                <div
+                  key={group}
+                  className="p-4 rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/50 text-center"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const productCode = e.dataTransfer.getData('productCode');
+                    if (productCode) {
+                      handleSortChange(productCode, group);
+                    }
+                  }}
+                >
+                  <div className="font-bold text-violet-700 mb-2">Rilascia qui per</div>
+                  <div className="text-xl font-black text-violet-900">{group}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-8 flex justify-between">
+          <button
+            onClick={() => {
+              if (confirm("Vuoi resettare tutte le classificazioni?")) {
+                setResult(prev => ({ ...prev, sortingGroups: {} }));
+              }
+            }}
+            className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+          >
+            Reset Classifiche
+          </button>
+          
+          <button 
+            onClick={handleNextProduct}
+            className="px-8 py-4 bg-violet-600 text-white font-black rounded-2xl hover:bg-violet-700 shadow-lg"
+          >
+            Completa Test
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderQDA = () => {
+    if (!currentProduct) return null;
+    return (
+      <div className="max-w-2xl mx-auto w-full animate-in fade-in duration-500">
+        <div className="mb-8 p-6 bg-indigo-50 border border-indigo-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div> 
+            <p className="text-sm text-indigo-600 font-bold uppercase tracking-widest mb-1">Campione</p> 
+            <p className="text-5xl font-black text-indigo-900 font-mono tracking-tighter">{currentProduct.code}</p> 
+          </div>
+          <div className="text-right"> 
+            <p className="text-xs text-indigo-400 font-bold uppercase mb-1">Progresso</p> 
+            <p className="text-lg font-bold text-indigo-900">{currentProductIndex + 1} / {products.length}</p> 
+          </div>
+        </div>
+        <div className="space-y-8">
+          {test.config.attributes.map(attr => (
+            <div key={attr.id} className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+              <div className="mb-6">
+                   <div className="flex justify-between items-baseline mb-2"> <label className="text-3xl font-black text-slate-900 tracking-tight">{attr.name}</label> </div>
+                   {attr.description && <div className="flex gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 leading-relaxed italic"><Info size={16} className="text-slate-400 shrink-0 mt-1"/> <p>{attr.description}</p></div>}
+              </div>
+              {renderScaleInput(attr)}
+            </div>
+          ))}
+        </div>
+        <div className="mt-12 mb-32 flex justify-center">
+          <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white font-black rounded-3xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all flex items-center gap-3 text-xl active:scale-95 group"> {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'} <ArrowRight size={28} className="group-hover:translate-x-2 transition-transform" /> </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderScaleInput = (attr: Attribute) => {
+    if (!currentProduct) return null;
+    const scaleType = attr.scaleType || 'linear';
+    let defaultValue = 0;
+    if (scaleType === 'linear9') defaultValue = 1;
+    else if (scaleType === 'linear10') defaultValue = 1;
+    else if (scaleType === 'likert5') defaultValue = 1;
+    else if (scaleType === 'likert7') defaultValue = 1;
+    else if (scaleType === 'likert9') defaultValue = 1;
+    const val = (result.qdaRatings || {})[`${currentProduct.code}_${attr.id}`] ?? defaultValue;
+    
+    if (scaleType === 'linear9') {
+        return (
+            <div className="space-y-6">
+                <div className="relative h-12 flex items-center mt-12">
+                    {attr.referenceValue !== undefined && (
+                        <div className="absolute z-20 flex flex-col items-center pointer-events-none" style={{ left: `${((attr.referenceValue - 1) / 8) * 100}%`, transform: 'translateX(-50%)', top: '-42px' }}>
+                            <div className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-lg mb-1 whitespace-nowrap uppercase border border-red-400 flex items-center gap-1"> <Target size={10} /> {attr.referenceLabel || 'RIF'}: {attr.referenceValue.toFixed(1)} </div>
+                            <div className="w-1 h-10 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.4)]" />
+                        </div>
+                    )}
+                    <input type="range" min="1" max="9" step="0.1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
+                </div>
+                <div className="flex justify-between px-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.leftAnchor || 'Debole'}</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.rightAnchor || 'Forte'}</span>
+                </div>
+                <div className="text-center text-lg font-black text-indigo-600">{val.toFixed(1)}</div>
+            </div>
+        );
+    }
+    if (scaleType === 'likert9' || scaleType === 'likert7' || scaleType === 'likert5') {
+        const points = scaleType === 'likert9' ? 9 : scaleType === 'likert7' ? 7 : 5;
+        const range = Array.from({length: points}, (_, i) => i + 1);
+        return (
+            <div className="flex flex-col gap-4">
+                <div className="flex justify-between text-xs font-bold text-slate-400 px-2 uppercase tracking-wider">
+                    <span>{attr.leftAnchor || 'Min'}</span>
+                    <span>{attr.rightAnchor || 'Max'}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 relative py-4">
+                    {attr.referenceValue !== undefined && (
+                        <div 
+                          className="absolute top-0 w-px h-full border-l-2 border-dashed border-indigo-400 pointer-events-none z-0 opacity-50 flex flex-col items-center"
+                          style={{ left: `calc(${((attr.referenceValue - 1) / (points - 1)) * 100}% + 0px)` }} 
+                        >
+                            <div className="bg-indigo-600 text-white text-[8px] px-1 rounded-sm -mt-2 uppercase font-black tracking-tighter shadow-sm whitespace-nowrap">
+                                {attr.referenceLabel || 'REF'}
+                            </div>
+                        </div>
+                    )}
+                    {range.map(p => (
+                         <button key={p} onClick={() => handleQdaChange(attr.id, p)} className={`flex-1 aspect-square rounded-xl border-2 font-bold transition-all active:scale-95 z-10 ${val === p ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 shadow-sm'}`}> {p} </button>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+    return (
+        <div className="space-y-6">
+            <div className="relative h-12 flex items-center mt-12">
+                {attr.referenceValue !== undefined && (
+                    <div className="absolute z-20 flex flex-col items-center pointer-events-none" style={{ left: `${attr.referenceValue}%`, transform: 'translateX(-50%)', top: '-42px' }}>
+                        <div className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-lg mb-1 whitespace-nowrap uppercase border border-red-400 flex items-center gap-1"> <Target size={10} /> {attr.referenceLabel || 'RIF'}: {attr.referenceValue} </div>
+                        <div className="w-1 h-10 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.4)]" />
+                    </div>
+                )}
+                <input type="range" min="0" max="100" step="1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
+            </div>
+            <div className="flex justify-between px-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.leftAnchor || 'Debole'}</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.rightAnchor || 'Forte'}</span>
+            </div>
+        </div>
+    );
   };
 
   const renderTriangle = () => {
@@ -523,671 +1826,65 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     </div>
   );
 
-  const renderScaleInput = (attr: Attribute) => {
-    if (!currentProduct) return null;
-    const scaleType = attr.scaleType || 'linear';
-    let defaultValue = 0;
-    if (scaleType === 'linear9') defaultValue = 1;
-    else if (scaleType === 'linear10') defaultValue = 1;
-    else if (scaleType === 'likert5') defaultValue = 1;
-    else if (scaleType === 'likert7') defaultValue = 1;
-    else if (scaleType === 'likert9') defaultValue = 1;
-    const val = (result.qdaRatings || {})[`${currentProduct.code}_${attr.id}`] ?? defaultValue;
-    if (scaleType === 'linear9') {
-        return (
-            <div className="space-y-6">
-                <div className="relative h-12 flex items-center mt-12">
-                    {attr.referenceValue !== undefined && (
-                        <div className="absolute z-20 flex flex-col items-center pointer-events-none" style={{ left: `${((attr.referenceValue - 1) / 8) * 100}%`, transform: 'translateX(-50%)', top: '-42px' }}>
-                            <div className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-lg mb-1 whitespace-nowrap uppercase border border-red-400 flex items-center gap-1"> <Target size={10} /> {attr.referenceLabel || 'RIF'}: {attr.referenceValue.toFixed(1)} </div>
-                            <div className="w-1 h-10 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.4)]" />
-                        </div>
-                    )}
-                    <input type="range" min="1" max="9" step="0.1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
-                </div>
-                <div className="flex justify-between px-2">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.leftAnchor || 'Debole'}</span>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.rightAnchor || 'Forte'}</span>
-                </div>
-                <div className="text-center text-lg font-black text-indigo-600">{val.toFixed(1)}</div>
-            </div>
-        );
+  // ================ MAIN RENDER ================
+  const renderTestContent = () => {
+    switch (test.type) {
+      case TestType.QDA:
+        return renderQDA();
+      case TestType.HEDONIC:
+        return renderHedonic();
+      case TestType.TRIANGLE:
+        return renderTriangle();
+      case TestType.PAIRED_COMPARISON:
+        return renderPairedComparison();
+      case TestType.TDS:
+        return renderTDS();
+      case TestType.TIME_INTENSITY:
+        return renderTimeIntensity();
+      case TestType.CATA:
+        return renderCATA();
+      case TestType.RATA:
+        return renderRATA();
+      case TestType.NAPPING:
+        return renderNapping();
+      case TestType.SORTING:
+        return renderSorting();
+      case TestType.FLASH_PROFILE:
+        return renderFlashProfile();
+      default:
+        return <div className="text-center text-2xl font-bold text-slate-500">Tipo di test non supportato</div>;
     }
-    if (scaleType === 'likert9' || scaleType === 'likert7' || scaleType === 'likert5') {
-        const points = scaleType === 'likert9' ? 9 : scaleType === 'likert7' ? 7 : 5;
-        const range = Array.from({length: points}, (_, i) => i + 1);
-        return (
-            <div className="flex flex-col gap-4">
-                <div className="flex justify-between text-xs font-bold text-slate-400 px-2 uppercase tracking-wider">
-                    <span>{attr.leftAnchor || 'Min'}</span>
-                    <span>{attr.rightAnchor || 'Max'}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 relative py-4">
-                    {attr.referenceValue !== undefined && (
-                        <div 
-                          className="absolute top-0 w-px h-full border-l-2 border-dashed border-indigo-400 pointer-events-none z-0 opacity-50 flex flex-col items-center"
-                          style={{ left: `calc(${((attr.referenceValue - 1) / (points - 1)) * 100}% + 0px)` }} 
-                        >
-                            <div className="bg-indigo-600 text-white text-[8px] px-1 rounded-sm -mt-2 uppercase font-black tracking-tighter shadow-sm whitespace-nowrap">
-                                {attr.referenceLabel || 'REF'}
-                            </div>
-                        </div>
-                    )}
-                    {range.map(p => (
-                         <button key={p} onClick={() => handleQdaChange(attr.id, p)} className={`flex-1 aspect-square rounded-xl border-2 font-bold transition-all active:scale-95 z-10 ${val === p ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 shadow-sm'}`}> {p} </button>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-    return (
-        <div className="space-y-6">
-            <div className="relative h-12 flex items-center mt-12">
-                {attr.referenceValue !== undefined && (
-                    <div className="absolute z-20 flex flex-col items-center pointer-events-none" style={{ left: `${attr.referenceValue}%`, transform: 'translateX(-50%)', top: '-42px' }}>
-                        <div className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-md shadow-lg mb-1 whitespace-nowrap uppercase border border-red-400 flex items-center gap-1"> <Target size={10} /> {attr.referenceLabel || 'RIF'}: {attr.referenceValue} </div>
-                        <div className="w-1 h-10 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.4)]" />
-                    </div>
-                )}
-                <input type="range" min="0" max="100" step="1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
-            </div>
-            <div className="flex justify-between px-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.leftAnchor || 'Debole'}</span>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.rightAnchor || 'Forte'}</span>
-            </div>
-        </div>
-    );
-  };
-
-  const renderQDA = () => {
-    if (!currentProduct) return null;
-    return (
-    <div className="max-w-2xl mx-auto w-full animate-in fade-in duration-500">
-      <div className="mb-8 p-6 bg-indigo-50 border border-indigo-100 rounded-3xl flex justify-between items-center shadow-sm">
-        <div> <p className="text-sm text-indigo-600 font-bold uppercase tracking-widest mb-1">Campione</p> <p className="text-5xl font-black text-indigo-900 font-mono tracking-tighter">{currentProduct.code}</p> </div>
-        <div className="text-right"> <p className="text-xs text-indigo-400 font-bold uppercase mb-1">Progresso</p> <p className="text-lg font-bold text-indigo-900">{currentProductIndex + 1} / {products.length}</p> </div>
-      </div>
-      <div className="space-y-8">
-        {test.config.attributes.map(attr => (
-          <div key={attr.id} className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
-            <div className="mb-6">
-                 <div className="flex justify-between items-baseline mb-2"> <label className="text-3xl font-black text-slate-900 tracking-tight">{attr.name}</label> </div>
-                 {attr.description && <div className="flex gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 leading-relaxed italic"><Info size={16} className="text-slate-400 shrink-0 mt-1"/> <p>{attr.description}</p></div>}
-            </div>
-            {renderScaleInput(attr)}
-          </div>
-        ))}
-      </div>
-      <div className="mt-12 mb-32 flex justify-center">
-        <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white font-black rounded-3xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all flex items-center gap-3 text-xl active:scale-95 group"> {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'} <ArrowRight size={28} className="group-hover:translate-x-2 transition-transform" /> </button>
-      </div>
-    </div>
-  )};
-
-  const renderHedonic = () => {
-    if (!currentProduct) return null;
-    return (
-    <div className="max-w-2xl mx-auto w-full">
-      <div className="mb-8 p-6 bg-pink-50 border border-pink-100 rounded-3xl flex justify-between items-center shadow-sm">
-        <div> <p className="text-sm text-pink-600 font-bold uppercase tracking-widest mb-1">Campione</p> <p className="text-5xl font-black text-pink-900 font-mono">{currentProduct.code}</p> </div>
-        <div className="text-right"> <p className="text-xs text-pink-400 font-bold uppercase mb-1">Progresso</p> <p className="text-lg font-bold text-pink-900">{currentProductIndex + 1} / {products.length}</p> </div>
-      </div>
-      <div className="space-y-8">
-        {test.config.attributes.map(attr => {
-             const val = result.qdaRatings?.[`${currentProduct.code}_${attr.id}`] || 5;
-             return (
-              <div key={attr.id} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-                <label className="block text-2xl font-bold text-slate-800 mb-8 text-center">{attr.name}</label>
-                <div className="flex flex-col gap-3">
-                    {[9, 8, 7, 6, 5, 4, 3, 2, 1].map(score => (
-                        <label key={score} className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${val === score ? 'bg-pink-50 border-pink-500 ring-2 ring-pink-100' : 'hover:bg-slate-50 border-slate-100 shadow-sm'}`}>
-                            <input type="radio" name={`hedonic-${attr.id}`} value={score} checked={val === score} onChange={() => handleQdaChange(attr.id, score)} className="w-6 h-6 text-pink-600 accent-pink-600" />
-                            <span className={`flex-1 text-lg ${val === score ? 'text-pink-900 font-bold' : 'text-slate-600 font-medium'}`}> {score} </span>
-                            {score === 9 && <span className="text-xs font-bold text-pink-300 uppercase tracking-widest">Piace moltissimo</span>}
-                            {score === 1 && <span className="text-xs font-bold text-slate-300 uppercase tracking-widest">Dispiace moltissimo</span>}
-                        </label>
-                    ))}
-                </div>
-              </div>
-            );
-        })}
-      </div>
-      <div className="mt-12 mb-20 flex justify-center">
-        <button onClick={handleNextProduct} className="px-12 py-5 bg-pink-600 text-white font-black rounded-3xl hover:bg-pink-700 shadow-xl shadow-pink-100 transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
-      </div>
-    </div>
-  )};
-
-  const renderCATA = () => {
-    if (!currentProduct) return null;
-    return (
-    <div className="max-w-2xl mx-auto w-full">
-      <div className="mb-8 p-6 bg-emerald-50 border border-emerald-100 rounded-3xl flex justify-between items-center shadow-sm">
-        <div> <p className="text-sm text-emerald-600 font-bold uppercase tracking-widest mb-1">Campione</p> <p className="text-5xl font-black text-emerald-900 font-mono">{currentProduct.code}</p> </div>
-        <div className="text-right"> <p className="text-xs text-emerald-400 font-bold uppercase mb-1">Progresso</p> <p className="text-lg font-bold text-emerald-900">{currentProductIndex + 1} / {products.length}</p> </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {test.config.attributes.map(attr => {
-          const isChecked = result.cataSelection?.includes(`${currentProduct.code}_${attr.id}`);
-          return (
-            <button key={attr.id} onClick={() => handleCataToggle(attr.id)} className={`p-5 rounded-2xl border-2 text-left transition-all active:scale-95 ${isChecked ? 'border-emerald-500 bg-emerald-500 text-white shadow-lg' : 'border-slate-200 hover:border-emerald-200 bg-white'}`}>
-              <div className="flex items-center gap-4">
-                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${isChecked ? 'bg-white border-white' : 'border-slate-300 bg-slate-50'}`}> {isChecked && <CheckCircle size={16} className="text-emerald-600" />} </div>
-                <span className={`font-bold text-lg ${isChecked ? 'text-white' : 'text-slate-700'}`}>{attr.name}</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-12 mb-20 flex justify-center">
-        <button onClick={handleNextProduct} className="px-12 py-5 bg-emerald-600 text-white font-black rounded-3xl hover:bg-emerald-700 shadow-xl shadow-emerald-100 transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
-      </div>
-    </div>
-  )};
-
-  const renderRATA = () => {
-    if (!currentProduct) return null;
-    return (
-      <div className="max-w-2xl mx-auto w-full">
-        <div className="mb-8 p-6 bg-teal-50 border border-teal-100 rounded-3xl flex justify-between items-center shadow-sm">
-           <div> <p className="text-sm text-teal-600 font-bold uppercase tracking-widest mb-1">Campione</p> <p className="text-5xl font-black text-teal-900 font-mono">{currentProduct.code}</p> </div>
-           <div className="text-right"> <p className="text-xs text-teal-400 font-bold uppercase mb-1">Progresso</p> <p className="text-lg font-bold text-teal-900">{currentProductIndex + 1} / {products.length}</p> </div>
-        </div>
-        <div className="grid gap-4">
-          {test.config.attributes.map(attr => {
-            const key = `${currentProduct.code}_${attr.id}`;
-            const currentVal = result.rataSelection?.[key] || 0;
-            const isChecked = currentVal > 0;
-            return (
-              <div key={attr.id} className={`p-6 rounded-[32px] border-2 transition-all ${isChecked ? 'border-teal-500 bg-teal-50/50 shadow-lg scale-[1.02]' : 'border-slate-200 bg-white'}`}>
-                <div className="flex flex-col gap-6">
-                    <button onClick={() => handleRataChange(attr.id, isChecked ? 0 : 1)} className="flex items-center gap-4 group text-left">
-                         <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${isChecked ? 'bg-teal-500 border-teal-500 shadow-teal-200' : 'border-slate-300 bg-slate-50 group-hover:border-teal-300'}`}> {isChecked && <CheckCircle size={20} className="text-white" />} </div>
-                        <span className={`font-black text-2xl tracking-tight transition-colors ${isChecked ? 'text-teal-900' : 'text-slate-700 group-hover:text-teal-600'}`}>{attr.name}</span>
-                    </button>
-                    {isChecked && (
-                        <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-top-2">
-                            <span className="text-[10px] font-black text-teal-600 uppercase tracking-widest ml-1">Quanto è intenso?</span>
-                            <div className="flex items-center gap-3">
-                                {[1, 2, 3].map(lvl => (
-                                    <button key={lvl} onClick={() => handleRataChange(attr.id, lvl)} className={`flex-1 py-4 rounded-2xl font-black text-sm transition-all border-2 ${currentVal === lvl ? 'bg-teal-600 border-teal-600 text-white shadow-xl scale-105' : 'bg-white border-teal-100 text-teal-600 hover:bg-teal-50'}`}> 
-                                        {lvl === 1 ? 'Basso' : lvl === 2 ? 'Medio' : 'Alto'} ({lvl})
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-12 mb-20 flex justify-center">
-          <button onClick={handleNextProduct} className="px-12 py-5 bg-teal-600 text-white font-black rounded-3xl hover:bg-teal-700 shadow-xl shadow-teal-100 transition-all flex items-center gap-3 text-xl active:scale-95"> {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Invia Risultati'} <ArrowRight size={28} /> </button>
-        </div>
-      </div>
-  )};
-
-  const renderTDS = () => {
-    if (!currentProduct) return null;
-    const duration = test.config.durationSeconds || 60;
-    const progress = (elapsedTime / duration) * 100;
-    return (
-      <div className="max-w-4xl mx-auto w-full">
-         <div className="mb-8 p-6 bg-orange-50 border border-orange-100 rounded-3xl flex justify-between items-center shadow-sm">
-            <div> <p className="text-sm text-orange-600 font-bold uppercase tracking-widest mb-1">Campione</p> <p className="text-5xl font-black text-orange-900 font-mono tracking-tighter">{currentProduct.code}</p> </div>
-            <div className="text-right flex flex-col items-end"> 
-                <div className="flex items-center gap-2 text-3xl font-mono font-black text-orange-900"> <Clock size={24} className="text-orange-400"/> {elapsedTime.toFixed(1)}s </div> 
-                <span className="text-xs font-bold text-orange-400 uppercase tracking-widest">Tempo Trascorso</span>
-            </div>
-          </div>
-          <div className="w-full h-6 bg-slate-100 rounded-full mb-10 overflow-hidden shadow-inner border border-slate-200"> <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-500 ease-linear" style={{ width: `${Math.min(progress, 100)}%` }} /> </div>
-          {!isTimerRunning && elapsedTime === 0 && (
-             <button onClick={startTimer} className="w-full py-20 border-4 border-dashed border-slate-200 rounded-3xl hover:border-orange-500 hover:bg-orange-50 flex flex-col items-center gap-6 group transition-all cursor-pointer bg-white"> 
-                <div className="p-6 bg-orange-100 rounded-full text-orange-600 group-hover:scale-110 transition-transform"><Play size={64} fill="currentColor" /></div>
-                <span className="text-2xl font-black text-slate-400 group-hover:text-orange-700 uppercase tracking-widest">Avvia Timer</span> 
-             </button>
-          )}
-          {isTimerRunning && (
-            <div>
-              <h3 className="text-lg font-semibold text-slate-700 mb-6 text-center">
-                Clicca sulle sensazioni DOMINANTI che percepisci:
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-12">
-                {test.config.attributes.map(attr => (
-                  <button key={attr.id} onClick={() => handleDominantClick(attr.id)} className={`p-8 rounded-2xl font-bold text-xl transition-all shadow-sm active:scale-95 ${currentDominant === attr.id ? 'bg-orange-600 text-white scale-105 shadow-xl ring-4 ring-orange-200' : 'bg-white text-slate-700 border-2 border-slate-100 hover:border-orange-200'}`}> 
-                    {attr.name}
-                    {currentDominant === attr.id && (
-                      <div className="text-sm font-normal mt-2 opacity-90">
-                        Selezionato a {elapsedTime.toFixed(1)}s
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-              
-              {/* Cronologia TDS */}
-              <div className="mb-8">
-                <h4 className="text-lg font-semibold text-slate-700 mb-4 text-center">Cronologia TDS</h4>
-                <div className="bg-slate-50 rounded-xl p-4">
-                  {result.tdsLogs?.[currentProduct.code]?.length > 0 ? (
-                    <div className="space-y-2">
-                      {result.tdsLogs[currentProduct.code].map((log, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-lg">
-                          <span className="font-medium">{log.attributeId}</span>
-                          <span className="font-bold text-orange-600">{log.time.toFixed(1)}s</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center text-slate-400 py-8">
-                      Nessuna sensazione registrata ancora
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <button onClick={() => { stopTimer(); handleNextProduct(); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase tracking-widest transition-all"> <Square size={24} fill="currentColor" /> STOP & Prossimo </button>
-            </div>
-          )}
-           {!isTimerRunning && elapsedTime > 0 && (
-             <div>
-               <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm mb-6"> 
-                  <p className="text-slate-400 font-bold uppercase tracking-widest mb-6">Valutazione Completata</p> 
-                  <div className="flex gap-4">
-                    <button onClick={startTimer} className="flex-1 py-4 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300 transition-all flex items-center justify-center gap-3">
-                      <RefreshCcw size={20} />
-                      Riprendi
-                    </button>
-                    <button onClick={handleNextProduct} className="flex-1 py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-black shadow-xl shadow-indigo-100 transition-all text-lg"> 
-                      {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Concludi Sessione'} 
-                    </button> 
-                  </div>
-               </div>
-             </div>
-           )}
-      </div>
-    );
-  };
-
-  const renderTimeIntensity = () => {
-    if (!currentProduct) return null;
-    const duration = test.config.durationSeconds || 60;
-    const progress = (elapsedTime / duration) * 100;
-    const attrName = test.config.attributes[0]?.name || "Intensità";
-    const getColor = (intensity: number) => {
-        if (intensity < 30) return 'rgb(34, 197, 94)'; 
-        if (intensity < 60) return 'rgb(234, 179, 8)'; 
-        return 'rgb(239, 68, 68)'; 
-    };
-    
-    // SVG migliorato
-    const chartWidth = 100;
-    const chartHeight = 100;
-    const polylinePoints = tiHistory.map(p => {
-        const x = (p.t / duration) * chartWidth;
-        const y = chartHeight - (p.v / 100) * chartHeight;
-        return `${x},${y}`;
-    }).join(' ');
-    
-    // CORREZIONE: Gestione input intensità
-    const handleIntensityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = Number(e.target.value);
-      setCurrentIntensity(value);
-    };
-    
-    return (
-      <div className="max-w-2xl mx-auto w-full">
-         <div className="mb-8 p-6 bg-cyan-50 border border-cyan-100 rounded-3xl flex justify-between items-center shadow-sm">
-            <div> <p className="text-sm text-cyan-600 font-bold uppercase tracking-widest mb-1">Campione {currentProduct.code}</p> <p className="text-2xl font-black text-cyan-900">Valuta: {attrName}</p> </div>
-            <div className="text-right flex flex-col items-end"> 
-                <div className="flex items-center gap-2 text-3xl font-mono font-black text-cyan-900"> <Clock size={24} className="text-cyan-400"/> {elapsedTime.toFixed(1)}s </div> 
-                <span className="text-xs font-bold text-cyan-400 uppercase tracking-widest">Registrazione TI</span>
-            </div>
-          </div>
-          <div className="w-full h-4 bg-slate-100 rounded-full mb-10 overflow-hidden shadow-inner border border-slate-200"> <div className="h-full bg-gradient-to-r from-cyan-400 to-cyan-600 transition-all duration-500 ease-linear" style={{ width: `${Math.min(progress, 100)}%` }} /> </div>
-          {!isTimerRunning && elapsedTime === 0 ? (
-             <button onClick={startTimer} className="w-full py-20 border-4 border-dashed border-slate-200 rounded-3xl hover:border-cyan-500 hover:bg-cyan-50 flex flex-col items-center gap-6 group transition-all cursor-pointer bg-white"> 
-                <div className="p-6 bg-cyan-100 rounded-full text-cyan-600 group-hover:scale-110 transition-transform"><Play size={64} fill="currentColor" /></div>
-                <span className="text-2xl font-black text-slate-400 group-hover:text-cyan-700 uppercase tracking-widest">Avvia Registrazione TI</span> 
-             </button>
-          ) : isTimerRunning ? (
-            <div className="flex flex-col gap-8">
-              {/* Grafico SVG completo */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-200">
-                <h3 className="text-lg font-semibold text-slate-700 mb-4 text-center">Andamento Temporale</h3>
-                <div className="h-64">
-                  <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    {/* Background grid */}
-                    {Array.from({ length: 10 }).map((_, i) => (
-                      <g key={i}>
-                        <line x1="0" y1={i * 10} x2="100" y2={i * 10} stroke="#e5e7eb" strokeWidth="0.5" />
-                        <line x1={i * 10} y1="0" x2={i * 10} y2="100" stroke="#e5e7eb" strokeWidth="0.5" />
-                      </g>
-                    ))}
-                    <polyline
-                      points={polylinePoints}
-                      fill="none"
-                      stroke="rgb(6, 182, 212)"
-                      strokeWidth="3"
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
-              </div>
-              
-              {/* CORREZIONE: Slider funzionante */}
-              <div className="flex items-center gap-8">
-                <div className="flex-1 bg-slate-100 rounded-3xl border-2 border-slate-200 relative overflow-hidden shadow-inner flex flex-col-reverse touch-none h-[400px]">
-                  <div 
-                    className="w-full transition-all duration-75 ease-linear flex items-start justify-center relative" 
-                    style={{ 
-                      height: `${currentIntensity}%`, 
-                      backgroundColor: getColor(currentIntensity) 
-                    }}> 
-                    <div className="w-full h-1 bg-white/50 absolute top-0"></div> 
-                  </div>
-                  {/* CORREZIONE: Input funzionante */}
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="100" 
-                    step="1" 
-                    value={currentIntensity} 
-                    onChange={handleIntensityChange} 
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize z-10" 
-                    style={{ 
-                      writingMode: 'vertical-lr', 
-                      direction: 'rtl' 
-                    } as React.CSSProperties} 
-                  />
-                  <div className="absolute right-4 top-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Max</div>
-                  <div className="absolute right-4 bottom-4 text-xs font-bold text-slate-400 uppercase tracking-widest pointer-events-none">Min</div>
-                </div>
-                <div className="w-32 flex flex-col justify-center items-center">
-                  <span className="text-6xl font-black tabular-nums tracking-tighter" style={{color: getColor(currentIntensity)}}>{currentIntensity}</span>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-2">Intensità</span>
-                </div>
-              </div>
-              <button onClick={() => { stopTimer(); handleNextProduct(); }} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black hover:bg-black flex items-center justify-center gap-3 shadow-xl uppercase tracking-widest"> 
-                <Square size={24} fill="currentColor" /> STOP 
-              </button>
-            </div>
-          ) : (
-             <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm"> 
-                <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black shadow-xl transition-all text-xl"> 
-                  {currentProductIndex < products.length - 1 ? 'Prossimo' : 'Concludi'} 
-                </button> 
-             </div>
-          )}
-      </div>
-    );
-  };
-
-  const renderNapping = () => (
-      <div className="flex flex-col h-[85vh] w-full max-w-7xl mx-auto">
-          <div className="mb-4 flex justify-between items-center px-2"> 
-              <div>
-                  <h3 className="font-bold text-2xl text-slate-900 flex items-center gap-2"><MapPin className="text-indigo-600"/> Mappa Proiettiva</h3>
-                  <p className="text-slate-500 text-sm">Trascina i prodotti sulla tovaglia. Vicini = Simili.</p>
-              </div>
-              <button onClick={submitAll} className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg transition-all text-sm">Termina Test</button> 
-          </div>
-          <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 bg-white rounded-3xl p-4 shadow-sm border border-slate-200">
-              <div className="w-full md:w-48 flex flex-col gap-2 overflow-y-auto pr-2 border-r border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 sticky top-0 bg-white py-2">1. Seleziona</p>
-                  {products.map(p => {
-                      const isPlaced = placedProducts.includes(p.code);
-                      const isSelected = selectedOne === p.code;
-                      return (
-                          <button key={p.code} onClick={() => setSelectedOne(p.code)} className={`p-3 rounded-xl text-left font-mono font-bold transition-all relative overflow-hidden ${isSelected ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-300' : isPlaced ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-white border-2 border-slate-100 hover:border-indigo-300 text-slate-700'}`}> 
-                            <div className="flex justify-between items-center z-10 relative"> <span>{p.code}</span> {isPlaced && <CheckCircle size={14} className="text-green-600"/>} {isSelected && <MousePointer2 size={14} className="text-indigo-200 animate-pulse"/>} </div>
-                            {isPlaced && !isSelected && <div className="absolute inset-0 bg-green-100/30" />}
-                          </button>
-                      );
-                  })}
-                  <button onClick={() => { setPlacedProducts([]); setResult(prev => ({...prev, nappingData: {}})) }} className="mt-auto p-2 text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 justify-center border-t border-slate-100 pt-4"> <RefreshCcw size={12}/> Reset </button>
-              </div>
-              <div className="flex-1 relative bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-300 cursor-crosshair overflow-hidden shadow-inner" onClick={handleMapClick}>
-                  <div className="absolute top-1/2 left-0 w-full h-px bg-slate-300 z-0"></div> <div className="absolute left-1/2 top-0 h-full w-px bg-slate-300 z-0"></div>
-                  {Object.entries(result.nappingData || {}).map(([code, coords]) => { 
-                      const c = coords as { x: number, y: number }; 
-                      return ( <div key={code} className="absolute w-12 h-12 -ml-6 -mt-6 bg-indigo-600 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-lg border-4 border-white transition-all transform hover:scale-110 z-10 hover:z-20 cursor-pointer" style={{ left: `${c.x}%`, top: `${c.y}%` }} onClick={(e) => { e.stopPropagation(); setSelectedOne(code); }}> {code} </div> )
-                  })}
-                  {selectedOne ? ( <div className="absolute top-4 right-4 bg-indigo-600 text-white px-4 py-2 rounded-full text-xs font-bold animate-bounce z-30"> <MousePointer2 size={14}/> Posiziona {selectedOne} </div> ) : ( <div className="absolute bottom-4 left-4 text-slate-400 font-bold text-xs pointer-events-none bg-white/80 px-3 py-1 rounded-full border border-slate-200"> Clicca a sinistra poi qui </div> )}
-              </div>
-          </div>
-      </div>
-  );
-
-  const renderSorting = () => {
-    return (
-        <div className="max-w-4xl mx-auto w-full">
-            <div className="text-center mb-10">
-                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mx-auto mb-4"> <Layers size={32} /> </div>
-                <h3 className="text-3xl font-black text-slate-900">Sorting</h3>
-                <p className="text-slate-500 font-medium">Assegna lo stesso nome ai campioni simili.</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {products.map(p => (
-                    <div key={p.code} className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col gap-6 group transition-all">
-                        <div className="flex items-center gap-4">
-                            <div className="w-20 h-20 bg-slate-900 text-white rounded-[24px] flex items-center justify-center text-4xl font-black font-mono shadow-lg group-hover:scale-110 transition-transform"> {p.code} </div>
-                            <div className="flex-1">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Campione</span>
-                                <p className="font-bold text-slate-800">{p.name || 'Prodotto'}</p>
-                            </div>
-                        </div>
-                        <div className="relative">
-                            <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block mb-2 ml-1">Gruppo</label>
-                            <input type="text" value={result.sortingGroups?.[p.code] || ''} onChange={(e) => handleSortChange(p.code, e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-transparent rounded-2xl focus:border-indigo-500 focus:bg-white outline-none font-bold text-slate-800 transition-all" placeholder="Es: Dolce..." />
-                        </div>
-                    </div>
-                ))}
-            </div>
-            <div className="mt-16 flex justify-center">
-                <button onClick={submitAll} className="px-16 py-6 bg-slate-900 text-white rounded-[32px] font-black shadow-2xl active:scale-95 transition-all text-xl uppercase tracking-widest"> INVIA </button>
-            </div>
-        </div>
-    );
-  };
-
-  // CORREZIONE: Flash Profile senza useEffect duplicato
-  const renderFlashProfile = () => {
-    if (!currentProduct) return null;
-    
-    // Gestione caricamento attributi salvati
-    const loadSavedAttributes = () => {
-      const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_attributes`);
-      if (savedAttrs && customAttributes.length === 0) {
-        try {
-          const parsed = JSON.parse(savedAttrs);
-          if (Array.isArray(parsed)) {
-            setCustomAttributes(parsed);
-          }
-        } catch (e) {
-          console.error('Errore caricamento attributi salvati', e);
-        }
-      }
-    };
-
-    // Carica attributi salvati solo al primo render
-    React.useEffect(() => {
-      loadSavedAttributes();
-    }, [test.id]); // Solo quando cambia test.id
-
-    const handleAddAttribute = () => {
-      if (newAttribute.trim() && !customAttributes.includes(newAttribute.trim())) {
-        setCustomAttributes([...customAttributes, newAttribute.trim()]);
-        setNewAttribute('');
-      }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && newAttribute.trim()) {
-        if (!customAttributes.includes(newAttribute.trim())) {
-          setCustomAttributes([...customAttributes, newAttribute.trim()]);
-          setNewAttribute('');
-        }
-      }
-    };
-
-    const handleRemoveAttribute = (index: number) => {
-      const newAttrs = [...customAttributes];
-      newAttrs.splice(index, 1);
-      setCustomAttributes(newAttrs);
-    };
-
-    const handleNextWithSave = () => {
-      // Salva attributi in localStorage
-      if (customAttributes.length > 0) {
-        localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(customAttributes));
-      }
-      handleNextProduct();
-    };
-
-    return (
-      <div className="w-full max-w-3xl mx-auto">
-        <div className="mb-8 p-6 bg-fuchsia-50 border border-fuchsia-100 rounded-3xl flex justify-between items-center shadow-sm">
-          <div> 
-            <p className="text-sm text-fuchsia-600 font-bold uppercase tracking-widest mb-1">Campione</p> 
-            <p className="text-5xl font-black text-fuchsia-900 font-mono">{currentProduct.code}</p> 
-          </div>
-          <div className="text-right"> 
-            <p className="text-xs text-fuchsia-400 font-bold uppercase mb-1">Progresso</p> 
-            <p className="text-lg font-bold text-fuchsia-900">{currentProductIndex + 1} / {products.length}</p> 
-          </div>
-        </div>
-        
-        {/* Sezione per aggiungere attributi */}
-        <div className="mb-8 p-6 bg-white rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">Aggiungi un nuovo attributo descrittivo</h3>
-          <div className="flex gap-3">
-            <input 
-              value={newAttribute} 
-              onChange={e => setNewAttribute(e.target.value)} 
-              placeholder="Es: Note fruttate, amaro persistente..." 
-              className="flex-1 p-4 border-2 border-slate-200 rounded-xl shadow-sm focus:border-fuchsia-500 outline-none font-medium transition-all" 
-              onKeyDown={handleKeyDown} 
-            />
-            <button 
-              onClick={handleAddAttribute} 
-              className="px-8 py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black active:scale-95 transition-all flex items-center gap-2"
-              disabled={!newAttribute.trim()}
-            > 
-              <span className="text-xl">+</span> Aggiungi
-            </button>
-          </div>
-          <div className="mt-3 text-sm text-slate-500">
-            Suggerimenti: aroma, sapore, texture, aftertaste, aspetto...
-          </div>
-        </div>
-        
-        <div className="space-y-6 mb-12">
-          {customAttributes.length === 0 ? (
-            <div className="text-center py-12">
-              <Layers size={64} className="mx-auto mb-6 text-slate-300" />
-              <h3 className="text-xl font-semibold text-slate-700 mb-2">Nessun attributo ancora creato</h3>
-              <p className="text-slate-500">Inizia aggiungendo degli attributi descrittivi usando il campo sopra.</p>
-            </div>
-          ) : (
-            <>
-              <h3 className="text-lg font-semibold text-slate-900">
-                Attributi Creati ({customAttributes.length})
-              </h3>
-              {customAttributes.map((attr, index) => {
-                const currentValue = result.qdaRatings?.[`${currentProduct.code}_${attr}`] || 0;
-                return (
-                  <div key={index} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-fuchsia-100 flex items-center justify-center text-fuchsia-700 font-bold">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <span className="text-lg font-bold text-slate-800">{attr}</span>
-                          <div className="flex items-center gap-2 text-sm text-slate-500">
-                            <div className={`w-2 h-2 rounded-full ${
-                              currentValue === 0 ? 'bg-slate-300' :
-                              currentValue <= 3 ? 'bg-green-500' :
-                              currentValue <= 6 ? 'bg-yellow-500' : 'bg-red-500'
-                            }`} />
-                            {currentValue === 0 ? 'Non valutato' : `Intensità: ${currentValue}/10`}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveAttribute(index)}
-                        className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div className="space-y-4">
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="10" 
-                        step="0.5" 
-                        value={currentValue} 
-                        onChange={(e) => handleQdaChange(attr, parseFloat(e.target.value))} 
-                        className="w-full h-3 bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200 rounded-full appearance-none [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-fuchsia-500 [&::-webkit-slider-thumb]:shadow-lg" 
-                      />
-                      <div className="flex justify-between text-sm text-slate-500">
-                        <span>0 - Assente</span>
-                        <span className="font-bold">Valore: {currentValue}</span>
-                        <span>10 - Molto intenso</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-        
-        <div className="flex justify-center">
-          <button 
-            onClick={handleNextWithSave} 
-            className="px-12 py-5 bg-fuchsia-600 text-white rounded-2xl hover:bg-fuchsia-700 font-black shadow-xl transition-all flex items-center gap-3 text-xl active:scale-95 uppercase tracking-widest"
-          > 
-            {currentProductIndex < products.length - 1 ? 'Salva e Prossimo' : 'Concludi Flash Profile'} 
-            <ArrowRight size={24} /> 
-          </button>
-        </div>
-      </div>
-    );
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-inter">
-      <header className="bg-white border-b p-5 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md bg-white/80">
-        <h1 className="text-xl font-black text-slate-900 uppercase tracking-tighter truncate max-w-[50%]">{test.name}</h1>
-        <div className="flex items-center gap-6">
-          <div className="hidden sm:flex flex-col items-end">
-             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Giudice</span>
-             <span className="text-sm font-bold text-slate-900">{judgeName}</span>
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      {/* Header */}
+      <div className="max-w-6xl mx-auto mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900">{test.name}</h1>
+            <p className="text-slate-600">Giudice: <span className="font-bold">{judgeName}</span></p>
           </div>
-          <button onClick={onExit} className="text-xs font-black text-red-500 hover:text-red-700 uppercase tracking-widest border border-red-100 px-4 py-2 rounded-full bg-red-50/30 transition-colors">Esci</button>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                if (window.confirm("Vuoi uscire dal test? I progressi verranno persi.")) {
+                  onExit();
+                }
+              }}
+              className="px-4 py-2 border-2 border-slate-300 text-slate-700 rounded-xl font-bold hover:bg-slate-50"
+            >
+              Esci
+            </button>
+          </div>
         </div>
-      </header>
-      <main className="flex-1 p-6 md:p-12">
-        <div className="max-w-3xl mx-auto mb-12 text-center">
-            <p className="text-lg text-slate-600 leading-relaxed font-medium italic">"{test.config.instructions}"</p>
-        </div>
-        {test.type === TestType.TRIANGLE && renderTriangle()}
-        {test.type === TestType.PAIRED_COMPARISON && renderPairedComparison()}
-        {test.type === TestType.QDA && renderQDA()}
-        {test.type === TestType.HEDONIC && renderHedonic()}
-        {test.type === TestType.CATA && renderCATA()}
-        {test.type === TestType.RATA && renderRATA()}
-        {test.type === TestType.TDS && renderTDS()}
-        {test.type === TestType.TIME_INTENSITY && renderTimeIntensity()}
-        {test.type === TestType.NAPPING && renderNapping()}
-        {test.type === TestType.SORTING && renderSorting()}
-        {test.type === TestType.FLASH_PROFILE && renderFlashProfile()}
-      </main>
+      </div>
+      
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto">
+        {renderTestContent()}
+      </div>
     </div>
   );
 };
