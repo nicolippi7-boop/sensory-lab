@@ -95,3 +95,8 @@ export type P2PMessage =
   | { type: 'SYNC_TESTS'; payload: SensoryTest[] }
   | { type: 'SUBMIT_RESULT'; payload: JudgeResult }
   | { type: 'JUDGE_CONNECTED'; payload: { name: string } };
+  export interface TILogEntry {
+  time: number;
+  intensity: number;
+  attributeId?: string; // Aggiungi questa riga
+}

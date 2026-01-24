@@ -148,70 +148,142 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
     }
   };
 
-  const handleExportExcel = (test: SensoryTest) => {
-    const testResults = results.filter(r => r.testId === test.id);
-    if (testResults.length === 0) return alert("Nessun dato disponibile.");
-    const data: any[] = [];
-    testResults.forEach(res => {
-      const commonHeaders = { Giudice: res.judgeName, Data_Invio: res.submittedAt, Test: test.name, Metodo: test.type };
-      if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
-        const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
-        const baseRow = { ...commonHeaders, Scelta_Giudice: selection || '-', Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-' };
-        if (test.type === TestType.TRIANGLE && res.triangleResponse) {
-          data.push({
-            ...baseRow,
-            Tipo_Sentore: res.triangleResponse.sensoryCategoryType || '-',
-            Descrizione_Differenza: res.triangleResponse.description || '-',
-            Intensita: res.triangleResponse.intensity || 0,
-            Risposta_Forzata: res.triangleResponse.isForcedResponse ? 'Si' : 'No'
-          });
-        } else {
-          data.push(baseRow);
-        }
-      } else if (test.type === TestType.TDS) {
-        const tdsStartTime = res.tdsStartTime ? new Date(res.tdsStartTime).toLocaleTimeString('it-IT') : '-';
-        const tdsEndTime = res.tdsEndTime ? new Date(res.tdsEndTime).toLocaleTimeString('it-IT') : '-';
-        const getAttributeName = (attrId: string) => {
-          if (attrId === 'START') return 'START (Inizio Campione)';
-          if (attrId === 'END') return 'END (Fine Campione)';
-          return test.config.attributes.find(a => a.id === attrId)?.name || attrId;
-        };
-        Object.entries(res.tdsLogs || {}).forEach(([prodCode, logs]) => {
-          const logEntries = logs as any[];
-          logEntries.forEach((log: any, idx: number) => {
-            data.push({
-              ...commonHeaders,
-              Campione: prodCode,
-              Tempo_Inizio_Test: tdsStartTime,
-              Tempo_Fine_Test: tdsEndTime,
-              Sequenza: idx + 1,
-              Tempo_Registrazione: log.time ? log.time.toFixed(1) + ' s' : '-',
-              Attributo_Dominante: getAttributeName(log.attributeId) || '-'
-            });
-          });
+const handleExportExcel = (test: SensoryTest) => {
+  const testResults = results.filter(r => r.testId === test.id);
+  if (testResults.length === 0) return alert("Nessun dato disponibile.");
+  const data: any[] = [];
+  testResults.forEach(res => {
+    const commonHeaders = { 
+      Giudice: res.judgeName, 
+      Data_Invio: res.submittedAt, 
+      Test: test.name, 
+      Metodo: test.type 
+    };
+    
+    if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
+      const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
+      const baseRow = { 
+        ...commonHeaders, 
+        Scelta_Giudice: selection || '-', 
+        Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', 
+        Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-' 
+      };
+      if (test.type === TestType.TRIANGLE && res.triangleResponse) {
+        data.push({
+          ...baseRow,
+          Tipo_Sentore: res.triangleResponse.sensoryCategoryType || '-',
+          Descrizione_Differenza: res.triangleResponse.description || '-',
+          Intensita: res.triangleResponse.intensity || 0,
+          Risposta_Forzata: res.triangleResponse.isForcedResponse ? 'Si' : 'No'
         });
-      } else if (test.type === TestType.NAPPING) {
-        Object.entries(res.nappingData || {}).forEach(([code, coords]) => { const c = coords as { x: number; y: number }; data.push({ ...commonHeaders, Codice_Campione: code, Coordinata_X: c.x.toFixed(2), Coordinata_Y: c.y.toFixed(2) }); });
-      } else if (test.type === TestType.SORTING) {
-        Object.entries(res.sortingGroups || {}).forEach(([code, group]) => { data.push({ ...commonHeaders, Codice_Campione: code, Gruppo_Assegnato: group }); });
       } else {
-        test.config.products.forEach(prod => {
-          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
-          test.config.attributes.forEach(attr => {
-            const key = `${prod.code}_${attr.id}`;
-            if (test.type === TestType.CATA) row[attr.name] = res.cataSelection?.includes(key) ? 1 : 0;
-            else if (test.type === TestType.RATA) row[attr.name] = res.rataSelection?.[key] || 0;
-            else row[attr.name] = res.qdaRatings?.[key] || 0;
-          });
-          data.push(row);
-        });
+        data.push(baseRow);
       }
-    });
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Dati Sensoriali");
-    XLSX.writeFile(wb, `SensoryLab_${test.name.replace(/\s+/g, '_')}_Report.xlsx`);
-  };
+    } else if (test.type === TestType.TDS) {
+      const tdsStartTime = res.tdsStartTime ? new Date(res.tdsStartTime).toLocaleTimeString('it-IT') : '-';
+      const tdsEndTime = res.tdsEndTime ? new Date(res.tdsEndTime).toLocaleTimeString('it-IT') : '-';
+      const getAttributeName = (attrId: string) => {
+        if (attrId === 'START') return 'START (Inizio Campione)';
+        if (attrId === 'END') return 'END (Fine Campione)';
+        return test.config.attributes.find(a => a.id === attrId)?.name || attrId;
+      };
+      Object.entries(res.tdsLogs || {}).forEach(([prodCode, logs]) => {
+        const logEntries = logs as any[];
+        logEntries.forEach((log: any, idx: number) => {
+          data.push({
+            ...commonHeaders,
+            Campione: prodCode,
+            Tempo_Inizio_Test: tdsStartTime,
+            Tempo_Fine_Test: tdsEndTime,
+            Sequenza: idx + 1,
+            Tempo_Registrazione: log.time ? log.time.toFixed(1) + ' s' : '-',
+            Attributo_Dominante: getAttributeName(log.attributeId) || '-'
+          });
+        });
+      });
+    } else if (test.type === TestType.TIME_INTENSITY) {
+      Object.entries(res.tiLogs || {}).forEach(([prodCode, logs]) => {
+        const logEntries = logs as any[];
+        
+        // Trova l'attributo tracciato
+        let trackedAttribute = 'Intensità';
+        if (logEntries.length > 0 && logEntries[0].attributeId) {
+          trackedAttribute = logEntries[0].attributeId;
+        }
+        
+        // Esporta ogni punto di log
+        logEntries.forEach((log: any, idx: number) => {
+          data.push({
+            ...commonHeaders,
+            Campione: prodCode,
+            Attributo_Tracciato: trackedAttribute,
+            Tempo: log.time ? log.time.toFixed(1) + ' s' : '0 s',
+            Intensita: log.intensity || 0,
+            Progresso_Tempo: `${((log.time || 0) / (test.config.durationSeconds || 60) * 100).toFixed(1)}%`,
+            Sequenza: idx + 1
+          });
+        });
+        
+        // Aggiungi una riga di riepilogo
+        if (logEntries.length > 0) {
+          const avgIntensity = logEntries.reduce((sum, log) => sum + (log.intensity || 0), 0) / logEntries.length;
+          const maxIntensity = Math.max(...logEntries.map((log: any) => log.intensity || 0));
+          const maxTimeLog = logEntries.find((log: any) => log.intensity === maxIntensity);
+          const maxTime = maxTimeLog ? maxTimeLog.time : 0;
+          const duration = test.config.durationSeconds || 60;
+          
+          data.push({
+            ...commonHeaders,
+            Campione: prodCode,
+            Attributo_Tracciato: trackedAttribute,
+            Tempo: 'RIEPILOGO',
+            Intensita_Media: avgIntensity.toFixed(2),
+            Intensita_Max: maxIntensity,
+            Tempo_Max_Intensita: `${maxTime.toFixed(1)} s`,
+            Percentuale_Tempo_Max: `${(maxTime / duration * 100).toFixed(1)}%`,
+            Durata_Totale: `${duration} s`,
+            Punti_Rilevati: logEntries.length,
+            Frequenza_Campionamento: `${(logEntries.length / duration).toFixed(2)} Hz`
+          });
+        }
+      });
+    } else if (test.type === TestType.NAPPING) {
+      Object.entries(res.nappingData || {}).forEach(([code, coords]) => { 
+        const c = coords as { x: number; y: number }; 
+        data.push({ 
+          ...commonHeaders, 
+          Codice_Campione: code, 
+          Coordinata_X: c.x.toFixed(2), 
+          Coordinata_Y: c.y.toFixed(2) 
+        }); 
+      });
+    } else if (test.type === TestType.SORTING) {
+      Object.entries(res.sortingGroups || {}).forEach(([code, group]) => { 
+        data.push({ 
+          ...commonHeaders, 
+          Codice_Campione: code, 
+          Gruppo_Assegnato: group 
+        }); 
+      });
+    } else {
+      test.config.products.forEach(prod => {
+        const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+        test.config.attributes.forEach(attr => {
+          const key = `${prod.code}_${attr.id}`;
+          if (test.type === TestType.CATA) row[attr.name] = res.cataSelection?.includes(key) ? 1 : 0;
+          else if (test.type === TestType.RATA) row[attr.name] = res.rataSelection?.[key] || 0;
+          else row[attr.name] = res.qdaRatings?.[key] || 0;
+        });
+        data.push(row);
+      });
+    }
+  });
+  
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Dati Sensoriali");
+  XLSX.writeFile(wb, `SensoryLab_${test.name.replace(/\s+/g, '_')}_Report.xlsx`);
+};
 
   const getChartData = (test: SensoryTest) => {
     const testResults = results.filter(r => r.testId === test.id);
