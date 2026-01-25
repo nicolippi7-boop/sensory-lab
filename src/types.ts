@@ -78,7 +78,7 @@ export interface JudgeResult {
   triangleResponse?: TriangleResponse;
   pairedSelection?: string; 
   qdaRatings?: Record<string, number>;
-  flashAttributes?: string[];
+  flashAttributes?: string[]; // AGGIUNGI QUESTA LINEA
   cataSelection?: string[]; 
   rataSelection?: Record<string, number>;
   nappingData?: Record<string, { x: number, y: number }>;

@@ -189,6 +189,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       case TestType.TIME_INTENSITY: return "Traccia l'intensità dell'attributo nel tempo.";
       case TestType.CATA: return "Seleziona tutti i descrittori applicabili.";
       case TestType.RATA: return "Seleziona i descrittori e valuta l'intensità.";
+      case TestType.FLASH_PROFILE: return "Crea i tuoi attributi e valuta l'intensità per ogni campione.";
       default: return "Assaggia e valuta i campioni.";
     }
   };
@@ -351,6 +352,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             });
           }
         });
+      } else if (test.type === TestType.FLASH_PROFILE) {
+        // Per Flash Profile, raccogliamo tutti gli attributi unici da tutti i giudici
+        const allFlashAttributes = new Set<string>();
+        
+        // Prima passata: raccogli tutti gli attributi flash usati
+        testResults.forEach(r => {
+          // Aggiungi gli attributi dalla proprietà flashAttributes
+          if (r.flashAttributes && Array.isArray(r.flashAttributes)) {
+            r.flashAttributes.forEach(attr => allFlashAttributes.add(attr));
+          }
+          
+          // Cerca anche negli qdaRatings con prefisso flash_
+          Object.keys(r.qdaRatings || {}).forEach(key => {
+            if (key.startsWith('flash_')) {
+              const parts = key.split('_');
+              if (parts.length >= 3) {
+                const attrName = parts.slice(2).join('_');
+                allFlashAttributes.add(attrName);
+              }
+            }
+          });
+        });
+        
+        // Per il giudice corrente, esporta i suoi dati
+        const judgeFlashAttributes = new Set<string>();
+        
+        // Aggiungi gli attributi del giudice corrente
+        if (res.flashAttributes && Array.isArray(res.flashAttributes)) {
+          res.flashAttributes.forEach(attr => judgeFlashAttributes.add(attr));
+        }
+        
+        Object.keys(res.qdaRatings || {}).forEach(key => {
+          if (key.startsWith('flash_')) {
+            const parts = key.split('_');
+            if (parts.length >= 3) {
+              const attrName = parts.slice(2).join('_');
+              judgeFlashAttributes.add(attrName);
+            }
+          }
+        });
+        
+        // Per ogni prodotto, crea una riga con tutti gli attributi
+        test.config.products.forEach(prod => {
+          const row: any = { 
+            ...commonHeaders, 
+            Prodotto: prod.name, 
+            Codice: prod.code 
+          };
+          
+          // Aggiungi gli attributi flash del giudice
+          Array.from(judgeFlashAttributes).forEach(attr => {
+            const key = `flash_${prod.code}_${attr}`;
+            row[`FP_${attr}`] = res.qdaRatings?.[key] || 0;
+          });
+          
+          // Aggiungi anche gli attributi standard QDA se presenti
+          test.config.attributes.forEach(stdAttr => {
+            const stdKey = `${prod.code}_${stdAttr.id}`;
+            row[`STD_${stdAttr.name}`] = res.qdaRatings?.[stdKey] || 0;
+          });
+          
+          data.push(row);
+        });
+        
+        // Aggiungi anche una riga con la lista degli attributi personalizzati del giudice
+        if (res.flashAttributes && res.flashAttributes.length > 0) {
+          data.push({
+            ...commonHeaders,
+            Prodotto: 'ATTRIBUTI_PERSONALIZZATI',
+            Codice: 'LISTA',
+            Attributi_Personali: res.flashAttributes.join(', ')
+          });
+        }
       } else if (test.type === TestType.NAPPING) {
         Object.entries(res.nappingData || {}).forEach(([code, coords]) => { 
           const c = coords as { x: number; y: number }; 
@@ -387,7 +461,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           });
           data.push(row);
         });
-      } else if (test.type === TestType.QDA || test.type === TestType.HEDONIC || test.type === TestType.FLASH_PROFILE) {
+      } else if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
         test.config.products.forEach(prod => {
           const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
           test.config.attributes.forEach(attr => {
@@ -398,6 +472,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         });
       }
     });
+    
+    // Aggiungi righe di riepilogo per Flash Profile
+    if (test.type === TestType.FLASH_PROFILE) {
+      const allFlashAttributes = new Set<string>();
+      
+      testResults.forEach(res => {
+        if (res.flashAttributes && Array.isArray(res.flashAttributes)) {
+          res.flashAttributes.forEach(attr => allFlashAttributes.add(attr));
+        }
+        
+        Object.keys(res.qdaRatings || {}).forEach(key => {
+          if (key.startsWith('flash_')) {
+            const parts = key.split('_');
+            if (parts.length >= 3) {
+              const attrName = parts.slice(2).join('_');
+              allFlashAttributes.add(attrName);
+            }
+          }
+        });
+      });
+      
+      if (allFlashAttributes.size > 0) {
+        data.push({
+          Giudice: 'RIEPILOGO',
+          Data_Invio: '',
+          Test: test.name,
+          Metodo: test.type,
+          Prodotto: 'TUTTI_GLI_ATTRIBUTI',
+          Codice: 'TOTALE',
+          Totale_Attributi_Unici: allFlashAttributes.size,
+          Elenco_Attributi: Array.from(allFlashAttributes).join(', ')
+        });
+      }
+    }
     
     try {
       const ws = XLSX.utils.json_to_sheet(data);

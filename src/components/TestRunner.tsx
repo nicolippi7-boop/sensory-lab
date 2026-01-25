@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute, TriangleResponse } from '../types';
-import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Eye, Grid, List, Tag, Star } from 'lucide-react';
+import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Eye, Grid, List, Tag, Star, X } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 interface TestRunnerProps {
@@ -35,6 +35,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     tiLogs: {},
     nappingData: {},
     sortingGroups: {},
+    flashAttributes: [],
     tdsStartTime: undefined,
     tdsEndTime: undefined,
   });
@@ -64,7 +65,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   // Inizializza attributi da localStorage per Flash Profile
   useEffect(() => {
     if (test.type === TestType.FLASH_PROFILE) {
-      const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_attributes`);
+      const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_${judgeName}_attributes`);
       if (savedAttrs) {
         try {
           const parsed = JSON.parse(savedAttrs);
@@ -76,7 +77,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         }
       }
     }
-  }, [test.id, test.type]);
+  }, [test.id, test.type, judgeName]);
 
   useEffect(() => {
     if (prevTestIdRef.current !== test.id) {
@@ -103,6 +104,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                 tiLogs: {},
                 nappingData: {},
                 sortingGroups: {},
+                flashAttributes: [],
             };
 
             if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
@@ -367,6 +369,22 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }));
   };
 
+  // Funzioni specifiche per Flash Profile
+  const saveCustomAttributesToResult = (attrs: string[]) => {
+    setResult(prev => ({
+      ...prev,
+      flashAttributes: attrs
+    }));
+  };
+
+  const handleFlashIntensityChange = (prodCode: string, attr: string, value: number) => {
+    const key = `flash_${prodCode}_${attr}`;
+    setResult(prev => ({
+      ...prev,
+      qdaRatings: { ...prev.qdaRatings, [key]: value }
+    }));
+  };
+
   // ================ RENDER FUNCTIONS ================
 
   const renderHedonic = () => {
@@ -456,7 +474,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       if (newAttribute.trim() && !customAttributes.includes(newAttribute.trim())) {
         const newAttrs = [...customAttributes, newAttribute.trim()];
         setCustomAttributes(newAttrs);
-        localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(newAttrs));
+        saveCustomAttributesToResult(newAttrs);
+        localStorage.setItem(`flashProfile_${test.id}_${judgeName}_attributes`, JSON.stringify(newAttrs));
         setNewAttribute('');
       }
     };
@@ -464,7 +483,17 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     const handleRemoveAttribute = (attr: string) => {
       const newAttrs = customAttributes.filter(a => a !== attr);
       setCustomAttributes(newAttrs);
-        localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(newAttrs));
+      saveCustomAttributesToResult(newAttrs);
+      localStorage.setItem(`flashProfile_${test.id}_${judgeName}_attributes`, JSON.stringify(newAttrs));
+      
+      // Rimuovi anche tutte le valutazioni per questo attributo
+      const newRatings = { ...result.qdaRatings };
+      Object.keys(newRatings).forEach(key => {
+        if (key.includes(`_${attr}`)) {
+          delete newRatings[key];
+        }
+      });
+      setResult(prev => ({ ...prev, qdaRatings: newRatings }));
     };
     
     const handleDragStart = (attr: string) => {
@@ -473,23 +502,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     
     const handleDrop = (prodCode: string) => {
       if (draggingAttr) {
-        const key = `${prodCode}_${draggingAttr}`;
-        setResult(prev => ({
-          ...prev,
-          qdaRatings: { 
-            ...prev.qdaRatings, 
-            [key]: prev.qdaRatings?.[key] || 50 
-          }
-        }));
+        handleFlashIntensityChange(prodCode, draggingAttr, 50);
       }
     };
     
     const handleIntensityChange = (prodCode: string, attr: string, value: number) => {
-      const key = `${prodCode}_${attr}`;
-      setResult(prev => ({
-        ...prev,
-        qdaRatings: { ...prev.qdaRatings, [key]: value }
-      }));
+      handleFlashIntensityChange(prodCode, attr, value);
     };
     
     return (
@@ -498,14 +516,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           <div className="flex justify-between items-center">
             <div>
               <p className="text-sm text-purple-600 font-bold uppercase tracking-widest mb-1">Flash Profile</p>
-              <p className="text-3xl font-black text-purple-900">Associa e valuta gli attributi</p>
+              <p className="text-3xl font-black text-purple-900">Crea e valuta i tuoi attributi</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-purple-400 font-bold uppercase mb-1">Progresso</p>
               <p className="text-lg font-bold text-purple-900">{currentProductIndex + 1} / {products.length}</p>
             </div>
           </div>
-          <p className="text-slate-600 mt-4">Trascina gli attributi sui campioni e regola l'intensità</p>
+          <p className="text-slate-600 mt-4">Crea attributi personalizzati, trascinali sui campioni e valuta l'intensità</p>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -528,8 +546,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                 <button 
                   onClick={handleAddCustomAttribute}
                   className="px-4 py-3 bg-purple-600 text-white rounded-xl font-bold"
+                  disabled={!newAttribute.trim()}
                 >
-                  Aggiungi
+                  +
                 </button>
               </div>
               
@@ -555,18 +574,18 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   key={idx}
                   draggable
                   onDragStart={() => handleDragStart(attr)}
-                  className={`p-3 rounded-xl border-2 border-dashed cursor-grab active:cursor-grabbing ${
+                  className={`p-3 rounded-xl border-2 border-dashed cursor-grab active:cursor-grabbing flex justify-between items-center ${
                     sortingMode === 'grid' 
-                      ? 'text-center bg-purple-50 border-purple-200' 
-                      : 'flex justify-between items-center bg-white border-slate-200'
+                      ? 'text-center bg-purple-50 border-purple-200 flex-col' 
+                      : 'bg-white border-slate-200'
                   }`}
                 >
                   <span className="font-bold text-slate-800">{attr}</span>
                   <button 
                     onClick={() => handleRemoveAttribute(attr)}
-                    className="text-slate-400 hover:text-red-500"
+                    className="text-slate-400 hover:text-red-500 p-1"
                   >
-                    ✕
+                    <X size={16} />
                   </button>
                 </div>
               ))}
@@ -590,7 +609,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               <div className="space-y-8">
                 {products.map((product) => {
                   const productAttrs = customAttributes.filter(attr => {
-                    const key = `${product.code}_${attr}`;
+                    const key = `flash_${product.code}_${attr}`;
                     return result.qdaRatings?.[key] !== undefined;
                   });
                   
@@ -609,7 +628,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                             </div>
                             <div>
                               <h4 className="text-2xl font-black text-slate-900">{product.name}</h4>
-                              <p className="text-slate-500 text-sm">{productAttrs.length} attributi assegnati</p>
+                              <p className="text-slate-500 text-sm">
+                                {productAttrs.length} attributi assegnati di {customAttributes.length}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -619,7 +640,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                             Trascina qui
                           </div>
                           <div className="text-2xl font-black text-slate-900">
-                            {productAttrs.length}/{customAttributes.length}
+                            {productAttrs.length}
                           </div>
                         </div>
                       </div>
@@ -627,7 +648,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                       {productAttrs.length > 0 ? (
                         <div className="space-y-4">
                           {productAttrs.map((attr) => {
-                            const key = `${product.code}_${attr}`;
+                            const key = `flash_${product.code}_${attr}`;
                             const value = result.qdaRatings?.[key] || 50;
                             
                             return (
@@ -636,7 +657,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                                   <span className="font-bold text-purple-800">{attr}</span>
                                   <button 
                                     onClick={() => handleIntensityChange(product.code, attr, 0)}
-                                    className="text-slate-400 hover:text-red-500 text-sm"
+                                    className="text-slate-400 hover:text-red-500 text-sm px-2 py-1 rounded hover:bg-red-50"
                                   >
                                     Rimuovi
                                   </button>
@@ -686,15 +707,16 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             <div className="flex justify-between">
               <button
                 onClick={() => {
-                  if (confirm("Vuoi resettare tutti gli attributi?")) {
+                  if (confirm("Vuoi resettare tutti gli attributi e le valutazioni?")) {
                     setCustomAttributes([]);
-                    localStorage.removeItem(`flashProfile_${test.id}_attributes`);
+                    saveCustomAttributesToResult([]);
+                    localStorage.removeItem(`flashProfile_${test.id}_${judgeName}_attributes`);
                     setResult(prev => ({ ...prev, qdaRatings: {} }));
                   }
                 }}
                 className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
               >
-                Reset
+                Reset Completo
               </button>
               
               <button 
