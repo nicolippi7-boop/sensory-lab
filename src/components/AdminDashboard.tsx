@@ -1,10 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, Product, Attribute, TestConfig, JudgeResult } from '../types';
 import { suggestAttributes, analyzeResults } from '../services/geminiService';
-import { Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, Download, Pencil, Trash2, Save, QrCode, X, Copy, Check, Wifi, Layers, Activity, Target, Anchor, Shuffle, RefreshCw } from 'lucide-react';
+import { 
+  Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, Download, 
+  Pencil, Trash2, Save, QrCode, X, Copy, Check, Wifi, Layers, Activity, 
+  Target, Anchor, Shuffle, RefreshCw 
+} from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { supabase } from './supabaseClient'; // Assicurati che il percorso sia corretto
+import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
@@ -19,7 +23,9 @@ interface AdminDashboardProps {
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, onCreateTest, onUpdateTest, onDeleteTest, onNavigate, peerId }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
+  tests, results, onCreateTest, onUpdateTest, onDeleteTest, onNavigate, peerId 
+}) => {
   const [view, setView] = useState<'LIST' | 'CREATE' | 'DETAIL'>('LIST');
   const [selectedTest, setSelectedTest] = useState<SensoryTest | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -30,7 +36,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
   const [newTestType, setNewTestType] = useState<TestType>(TestType.QDA);
   const [randomize, setRandomize] = useState(false);
   const [correctAnswerCode, setCorrectAnswerCode] = useState('');
-  const [products, setProducts] = useState<Product[]>([{ id: '1', name: 'Campione A', code: '101' }, { id: '2', name: 'Campione B', code: '254' }]);
+  const [products, setProducts] = useState<Product[]>([
+    { id: generateId(), name: 'Campione A', code: '101' }, 
+    { id: generateId(), name: 'Campione B', code: '254' }
+  ]);
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   
   const [attrName, setAttrName] = useState('');
@@ -57,29 +66,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
   };
 
   const handleSave = () => {
-    if (!newTestName) return alert("Inserisci un nome.");
+    if (!newTestName.trim()) {
+      alert("Inserisci un nome per il test.");
+      return;
+    }
+    if (products.length === 0) {
+      alert("Aggiungi almeno un prodotto.");
+      return;
+    }
+    
     const testConfig: TestConfig = {
-        instructions: getDefaultInstructions(newTestType),
-        products,
-        attributes,
-        durationSeconds: (newTestType === TestType.TDS || newTestType === TestType.TIME_INTENSITY) ? 60 : undefined,
-        randomizePresentation: randomize,
-        correctOddSampleCode: (newTestType === TestType.TRIANGLE || newTestType === TestType.PAIRED_COMPARISON) ? correctAnswerCode : undefined
+      instructions: getDefaultInstructions(newTestType),
+      products,
+      attributes,
+      durationSeconds: (newTestType === TestType.TDS || newTestType === TestType.TIME_INTENSITY) ? 60 : undefined,
+      randomizePresentation: randomize,
+      correctOddSampleCode: (newTestType === TestType.TRIANGLE || newTestType === TestType.PAIRED_COMPARISON) ? correctAnswerCode : undefined
     };
 
     const testData: SensoryTest = {
-        id: editingId || generateId(),
-        name: newTestName,
-        type: newTestType,
-        createdAt: editingId ? (tests.find(t => t.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
-        status: 'active',
-        config: testConfig
+      id: editingId || generateId(),
+      name: newTestName.trim(),
+      type: newTestType,
+      createdAt: editingId ? (tests.find(t => t.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+      status: 'active',
+      config: testConfig
     };
 
     if (editingId) {
-        onUpdateTest(testData);
+      onUpdateTest(testData);
+      alert('Test aggiornato con successo!');
     } else {
-        onCreateTest(testData);
+      onCreateTest(testData);
     }
 
     resetForm();
@@ -87,229 +105,360 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ tests, results, 
   };
 
   const resetForm = () => {
-      setEditingId(null); setNewTestName(''); setNewTestType(TestType.QDA); setRandomize(false);
-      setProducts([{ id: '1', name: 'Campione A', code: '101' }, { id: '2', name: 'Campione B', code: '254' }]);
-      setAttributes([]); resetAttrInput(); setCorrectAnswerCode(''); setProductDescForAi('');
+    setEditingId(null); 
+    setNewTestName(''); 
+    setNewTestType(TestType.QDA); 
+    setRandomize(false);
+    setProducts([
+      { id: generateId(), name: 'Campione A', code: '101' }, 
+      { id: generateId(), name: 'Campione B', code: '254' }
+    ]);
+    setAttributes([]); 
+    resetAttrInput(); 
+    setCorrectAnswerCode(''); 
+    setProductDescForAi('');
+    setAiAnalysis(null);
   };
 
-  const resetAttrInput = () => { setAttrName(''); setAttrDesc(''); setAttrMin('Debole'); setAttrMax('Forte'); setAttrScale('linear'); setAttrRefValue(''); setAttrRefLabel(''); };
+  const resetAttrInput = () => { 
+    setAttrName(''); 
+    setAttrDesc(''); 
+    setAttrMin('Debole'); 
+    setAttrMax('Forte'); 
+    setAttrScale('linear'); 
+    setAttrRefValue(''); 
+    setAttrRefLabel(''); 
+  };
 
   const handleAddAttribute = () => {
-      if (!attrName.trim()) return;
-      setAttributes([...attributes, { 
-          id: generateId(), 
-          name: attrName.trim(), 
-          description: attrDesc.trim(), 
-          leftAnchor: attrMin, 
-          rightAnchor: attrMax, 
-          scaleType: attrScale,
-          referenceValue: attrRefValue !== '' ? Number(attrRefValue) : undefined,
-          referenceLabel: attrRefLabel.trim() || undefined
-      }]);
-      resetAttrInput();
+    if (!attrName.trim()) {
+      alert("Inserisci un nome per l'attributo.");
+      return;
+    }
+    
+    const newAttribute: Attribute = {
+      id: generateId(),
+      name: attrName.trim(),
+      description: attrDesc.trim(),
+      leftAnchor: attrMin,
+      rightAnchor: attrMax,
+      scaleType: attrScale,
+      referenceValue: attrRefValue !== '' ? Number(attrRefValue) : undefined,
+      referenceLabel: attrRefLabel.trim() || undefined
+    };
+    
+    setAttributes([...attributes, newAttribute]);
+    resetAttrInput();
   };
 
   const handleAiSuggest = async () => {
-    if (!productDescForAi) return;
+    if (!productDescForAi.trim()) {
+      alert("Inserisci una descrizione del prodotto per l'AI.");
+      return;
+    }
+    
     setAiLoading(true);
-    const suggestions = await suggestAttributes(productDescForAi);
-    const newAttrs: Attribute[] = suggestions.map(name => ({ id: generateId(), name, category: 'taste', scaleType: 'linear', leftAnchor: 'Debole', rightAnchor: 'Forte', description: '' } as Attribute));
-    setAttributes([...attributes, ...newAttrs]);
-    setAiLoading(false);
+    try {
+      const suggestions = await suggestAttributes(productDescForAi);
+      const newAttrs: Attribute[] = suggestions.map(name => ({
+        id: generateId(),
+        name,
+        category: 'taste',
+        scaleType: 'linear',
+        leftAnchor: 'Debole',
+        rightAnchor: 'Forte',
+        description: ''
+      } as Attribute));
+      
+      setAttributes([...attributes, ...newAttrs]);
+    } catch (error) {
+      console.error('Errore nella generazione AI:', error);
+      alert("Errore nella generazione degli attributi tramite AI.");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const getDefaultInstructions = (type: TestType): string => {
-      switch(type) {
-          case TestType.TRIANGLE: return "Seleziona il campione diverso.";
-          case TestType.QDA: return "Valuta l'intensità di ogni attributo.";
-          case TestType.TDS: return "Seleziona l'attributo dominante nel tempo.";
-          case TestType.NAPPING: return "Posiziona i campioni sulla mappa sensoriale.";
-          case TestType.SORTING: return "Raggruppa i campioni simili assegnando lo stesso nome di gruppo.";
-          case TestType.TIME_INTENSITY: return "Traccia l'intensità dell'attributo nel tempo.";
-          case TestType.CATA: return "Seleziona tutti i descrittori applicabili.";
-          case TestType.RATA: return "Seleziona i descrittori e valuta l'intensità.";
-          default: return "Assaggia e valuta i campioni.";
-      }
+    switch(type) {
+      case TestType.TRIANGLE: return "Seleziona il campione diverso.";
+      case TestType.QDA: return "Valuta l'intensità di ogni attributo.";
+      case TestType.TDS: return "Seleziona l'attributo dominante nel tempo.";
+      case TestType.NAPPING: return "Posiziona i campioni sulla mappa sensoriale.";
+      case TestType.SORTING: return "Raggruppa i campioni simili assegnando lo stesso nome di gruppo.";
+      case TestType.TIME_INTENSITY: return "Traccia l'intensità dell'attributo nel tempo.";
+      case TestType.CATA: return "Seleziona tutti i descrittori applicabili.";
+      case TestType.RATA: return "Seleziona i descrittori e valuta l'intensità.";
+      default: return "Assaggia e valuta i campioni.";
+    }
   };
 
   const handleResetResults = async (test: SensoryTest) => {
     const count = results.filter(r => r.testId === test.id).length;
-    if (count === 0) return alert("Nessun risultato da cancellare.");
+    if (count === 0) {
+      alert("Nessun risultato da cancellare per questo test.");
+      return;
+    }
     
     if(window.confirm(`⚠️ SEI SICURO? Vuoi cancellare tutte le ${count} risposte per "${test.name}"? Il test rimarrà configurato, ma perderai tutti i dati degli assaggiatori.`)) {
       try {
-        const { error } = await supabase.from('results').delete().eq('test_id', test.id);
+        const { error } = await supabase
+          .from('results')
+          .delete()
+          .eq('test_id', test.id);
+        
         if (error) throw error;
+        
         alert("✅ Risultati azzerati con successo.");
-        onUpdateTest(test); // Trigger refresh
+        onUpdateTest({...test});
       } catch (err: any) {
+        console.error('Errore cancellazione risultati:', err);
         alert("Errore durante la cancellazione: " + err.message);
       }
     }
   };
 
-const handleExportExcel = (test: SensoryTest) => {
-  const testResults = results.filter(r => r.testId === test.id);
-  if (testResults.length === 0) return alert("Nessun dato disponibile.");
-  const data: any[] = [];
-  testResults.forEach(res => {
-    const commonHeaders = { 
-      Giudice: res.judgeName, 
-      Data_Invio: res.submittedAt, 
-      Test: test.name, 
-      Metodo: test.type 
-    };
-    
-    if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
-      const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
-      const baseRow = { 
-        ...commonHeaders, 
-        Scelta_Giudice: selection || '-', 
-        Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', 
-        Esito: (test.config.correctOddSampleCode && selection) ? (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-' 
-      };
-      if (test.type === TestType.TRIANGLE && res.triangleResponse) {
-        data.push({
-          ...baseRow,
-          Tipo_Sentore: res.triangleResponse.sensoryCategoryType || '-',
-          Descrizione_Differenza: res.triangleResponse.description || '-',
-          Intensita: res.triangleResponse.intensity || 0,
-          Risposta_Forzata: res.triangleResponse.isForcedResponse ? 'Si' : 'No'
-        });
-      } else {
-        data.push(baseRow);
-      }
-    } else if (test.type === TestType.TDS) {
-      const tdsStartTime = res.tdsStartTime ? new Date(res.tdsStartTime).toLocaleTimeString('it-IT') : '-';
-      const tdsEndTime = res.tdsEndTime ? new Date(res.tdsEndTime).toLocaleTimeString('it-IT') : '-';
-      const getAttributeName = (attrId: string) => {
-        if (attrId === 'START') return 'START (Inizio Campione)';
-        if (attrId === 'END') return 'END (Fine Campione)';
-        return test.config.attributes.find(a => a.id === attrId)?.name || attrId;
-      };
-      Object.entries(res.tdsLogs || {}).forEach(([prodCode, logs]) => {
-        const logEntries = logs as any[];
-        logEntries.forEach((log: any, idx: number) => {
-          data.push({
-            ...commonHeaders,
-            Campione: prodCode,
-            Tempo_Inizio_Test: tdsStartTime,
-            Tempo_Fine_Test: tdsEndTime,
-            Sequenza: idx + 1,
-            Tempo_Registrazione: log.time ? log.time.toFixed(1) + ' s' : '-',
-            Attributo_Dominante: getAttributeName(log.attributeId) || '-'
-          });
-        });
-      });
-    } else if (test.type === TestType.TIME_INTENSITY) {
-      Object.entries(res.tiLogs || {}).forEach(([prodCode, logs]) => {
-        const logEntries = logs as any[];
-        
-        // Trova l'attributo tracciato
-        let trackedAttribute = 'Intensità';
-        if (logEntries.length > 0 && logEntries[0].attributeId) {
-          trackedAttribute = logEntries[0].attributeId;
-        }
-        
-        // Esporta ogni punto di log
-        logEntries.forEach((log: any, idx: number) => {
-          data.push({
-            ...commonHeaders,
-            Campione: prodCode,
-            Attributo_Tracciato: trackedAttribute,
-            Tempo: log.time ? log.time.toFixed(1) + ' s' : '0 s',
-            Intensita: log.intensity || 0,
-            Progresso_Tempo: `${((log.time || 0) / (test.config.durationSeconds || 60) * 100).toFixed(1)}%`,
-            Sequenza: idx + 1
-          });
-        });
-        
-        // Aggiungi una riga di riepilogo
-        if (logEntries.length > 0) {
-          const avgIntensity = logEntries.reduce((sum, log) => sum + (log.intensity || 0), 0) / logEntries.length;
-          const maxIntensity = Math.max(...logEntries.map((log: any) => log.intensity || 0));
-          const maxTimeLog = logEntries.find((log: any) => log.intensity === maxIntensity);
-          const maxTime = maxTimeLog ? maxTimeLog.time : 0;
-          const duration = test.config.durationSeconds || 60;
-          
-          data.push({
-            ...commonHeaders,
-            Campione: prodCode,
-            Attributo_Tracciato: trackedAttribute,
-            Tempo: 'RIEPILOGO',
-            Intensita_Media: avgIntensity.toFixed(2),
-            Intensita_Max: maxIntensity,
-            Tempo_Max_Intensita: `${maxTime.toFixed(1)} s`,
-            Percentuale_Tempo_Max: `${(maxTime / duration * 100).toFixed(1)}%`,
-            Durata_Totale: `${duration} s`,
-            Punti_Rilevati: logEntries.length,
-            Frequenza_Campionamento: `${(logEntries.length / duration).toFixed(2)} Hz`
-          });
-        }
-      });
-    } else if (test.type === TestType.NAPPING) {
-      Object.entries(res.nappingData || {}).forEach(([code, coords]) => { 
-        const c = coords as { x: number; y: number }; 
-        data.push({ 
-          ...commonHeaders, 
-          Codice_Campione: code, 
-          Coordinata_X: c.x.toFixed(2), 
-          Coordinata_Y: c.y.toFixed(2) 
-        }); 
-      });
-    } else if (test.type === TestType.SORTING) {
-      Object.entries(res.sortingGroups || {}).forEach(([code, group]) => { 
-        data.push({ 
-          ...commonHeaders, 
-          Codice_Campione: code, 
-          Gruppo_Assegnato: group 
-        }); 
-      });
-    } else {
-      test.config.products.forEach(prod => {
-        const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
-        test.config.attributes.forEach(attr => {
-          const key = `${prod.code}_${attr.id}`;
-          if (test.type === TestType.CATA) row[attr.name] = res.cataSelection?.includes(key) ? 1 : 0;
-          else if (test.type === TestType.RATA) row[attr.name] = res.rataSelection?.[key] || 0;
-          else row[attr.name] = res.qdaRatings?.[key] || 0;
-        });
-        data.push(row);
-      });
+  const handleExportExcel = (test: SensoryTest) => {
+    const testResults = results.filter(r => r.testId === test.id);
+    if (testResults.length === 0) {
+      alert("Nessun dato disponibile per l'esportazione.");
+      return;
     }
-  });
-  
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Dati Sensoriali");
-  XLSX.writeFile(wb, `SensoryLab_${test.name.replace(/\s+/g, '_')}_Report.xlsx`);
-};
+    
+    const data: any[] = [];
+    testResults.forEach(res => {
+      const commonHeaders = { 
+        Giudice: res.judgeName, 
+        Data_Invio: res.submittedAt, 
+        Test: test.name, 
+        Metodo: test.type 
+      };
+      
+      if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
+        const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
+        const baseRow = { 
+          ...commonHeaders, 
+          Scelta_Giudice: selection || '-', 
+          Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', 
+          Esito: (test.config.correctOddSampleCode && selection) ? 
+            (test.config.correctOddSampleCode === selection ? 'CORRETTO' : 'ERRATO') : '-' 
+        };
+        
+        if (test.type === TestType.TRIANGLE && res.triangleResponse) {
+          data.push({
+            ...baseRow,
+            Tipo_Sentore: res.triangleResponse.sensoryCategoryType || '-',
+            Descrizione_Differenza: res.triangleResponse.description || '-',
+            Intensita: res.triangleResponse.intensity || 0,
+            Risposta_Forzata: res.triangleResponse.isForcedResponse ? 'Si' : 'No'
+          });
+        } else {
+          data.push(baseRow);
+        }
+      } else if (test.type === TestType.TDS) {
+        const tdsStartTime = res.tdsStartTime ? new Date(res.tdsStartTime).toLocaleTimeString('it-IT') : '-';
+        const tdsEndTime = res.tdsEndTime ? new Date(res.tdsEndTime).toLocaleTimeString('it-IT') : '-';
+        
+        const getAttributeName = (attrId: string) => {
+          if (attrId === 'START') return 'START (Inizio Campione)';
+          if (attrId === 'END') return 'END (Fine Campione)';
+          return test.config.attributes.find(a => a.id === attrId)?.name || attrId;
+        };
+        
+        Object.entries(res.tdsLogs || {}).forEach(([prodCode, logs]) => {
+          const logEntries = logs as any[];
+          logEntries.forEach((log: any, idx: number) => {
+            data.push({
+              ...commonHeaders,
+              Campione: prodCode,
+              Tempo_Inizio_Test: tdsStartTime,
+              Tempo_Fine_Test: tdsEndTime,
+              Sequenza: idx + 1,
+              Tempo_Registrazione: log.time ? `${log.time.toFixed(1)} s` : '-',
+              Attributo_Dominante: getAttributeName(log.attributeId) || '-'
+            });
+          });
+        });
+      } else if (test.type === TestType.TIME_INTENSITY) {
+        Object.entries(res.tiLogs || {}).forEach(([prodCode, logs]) => {
+          const logEntries = logs as any[];
+          
+          if (logEntries.length === 0) return;
+          
+          // Trova l'attributo tracciato con dettagli completi
+          let trackedAttributeId = 'Intensità';
+          let trackedAttributeName = 'Intensità';
+          
+          if (logEntries.length > 0 && logEntries[0].attributeId) {
+            trackedAttributeId = logEntries[0].attributeId;
+            const attr = test.config.attributes.find(a => a.id === trackedAttributeId);
+            trackedAttributeName = attr ? attr.name : trackedAttributeId;
+          }
+          
+          // Esporta ogni punto di log con attributo specifico
+          logEntries.forEach((log: any, idx: number) => {
+            data.push({
+              ...commonHeaders,
+              Campione: prodCode,
+              Codice_Campione: prodCode,
+              Attributo_Tracciato_ID: trackedAttributeId,
+              Attributo_Tracciato_Nome: trackedAttributeName,
+              Tempo_Secondi: log.time || 0,
+              Tempo_Formattato: log.time ? `${log.time.toFixed(1)} s` : '0 s',
+              Intensita: log.intensity || 0,
+              Progresso_Tempo_Percentuale: `${((log.time || 0) / (test.config.durationSeconds || 60) * 100).toFixed(1)}%`,
+              Sequenza_Punto: idx + 1
+            });
+          });
+          
+          // Aggiungi una riga di riepilogo statistico
+          if (logEntries.length > 0) {
+            const intensities = logEntries.map((log: any) => log.intensity || 0);
+            const avgIntensity = intensities.reduce((sum, val) => sum + val, 0) / intensities.length;
+            const maxIntensity = Math.max(...intensities);
+            const minIntensity = Math.min(...intensities);
+            const maxTimeLog = logEntries.find((log: any) => log.intensity === maxIntensity);
+            const maxTime = maxTimeLog ? maxTimeLog.time : 0;
+            const duration = test.config.durationSeconds || 60;
+            
+            // Calcola area sotto la curva (approssimazione trapezoidale)
+            let areaUnderCurve = 0;
+            for (let i = 1; i < logEntries.length; i++) {
+              const prevTime = logEntries[i-1].time || 0;
+              const currTime = logEntries[i].time || 0;
+              const prevIntensity = logEntries[i-1].intensity || 0;
+              const currIntensity = logEntries[i].intensity || 0;
+              const deltaTime = currTime - prevTime;
+              const avgHeight = (prevIntensity + currIntensity) / 2;
+              areaUnderCurve += avgHeight * deltaTime;
+            }
+            
+            data.push({
+              ...commonHeaders,
+              Campione: prodCode,
+              Codice_Campione: prodCode,
+              Attributo_Tracciato_Nome: trackedAttributeName,
+              Tempo_Formattato: 'RIEPILOGO STATISTICO',
+              Intensita_Media: avgIntensity.toFixed(2),
+              Intensita_Max: maxIntensity,
+              Tempo_Max_Intensita: `${maxTime.toFixed(1)} s`,
+              Intensita_Min: minIntensity,
+              Percentuale_Tempo_Max: `${(maxTime / duration * 100).toFixed(1)}%`,
+              Area_Sotto_Curva: areaUnderCurve.toFixed(2),
+              Durata_Totale: `${duration} s`,
+              Punti_Rilevati: logEntries.length,
+              Frequenza_Campionamento: `${(logEntries.length / duration).toFixed(2)} Hz`
+            });
+          }
+        });
+      } else if (test.type === TestType.NAPPING) {
+        Object.entries(res.nappingData || {}).forEach(([code, coords]) => { 
+          const c = coords as { x: number; y: number }; 
+          data.push({ 
+            ...commonHeaders, 
+            Codice_Campione: code, 
+            Coordinata_X: c.x.toFixed(2), 
+            Coordinata_Y: c.y.toFixed(2) 
+          }); 
+        });
+      } else if (test.type === TestType.SORTING) {
+        Object.entries(res.sortingGroups || {}).forEach(([code, group]) => { 
+          data.push({ 
+            ...commonHeaders, 
+            Codice_Campione: code, 
+            Gruppo_Assegnato: group as string
+          }); 
+        });
+      } else if (test.type === TestType.CATA) {
+        test.config.products.forEach(prod => {
+          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+          test.config.attributes.forEach(attr => {
+            const key = `${prod.code}_${attr.id}`;
+            row[attr.name] = res.cataSelection?.includes(key) ? 1 : 0;
+          });
+          data.push(row);
+        });
+      } else if (test.type === TestType.RATA) {
+        test.config.products.forEach(prod => {
+          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+          test.config.attributes.forEach(attr => {
+            const key = `${prod.code}_${attr.id}`;
+            row[attr.name] = res.rataSelection?.[key] || 0;
+          });
+          data.push(row);
+        });
+      } else if (test.type === TestType.QDA || test.type === TestType.HEDONIC || test.type === TestType.FLASH_PROFILE) {
+        test.config.products.forEach(prod => {
+          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+          test.config.attributes.forEach(attr => {
+            const key = `${prod.code}_${attr.id}`;
+            row[attr.name] = res.qdaRatings?.[key] || 0;
+          });
+          data.push(row);
+        });
+      }
+    });
+    
+    try {
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Dati Sensoriali");
+      XLSX.writeFile(wb, `SensoryLab_${test.name.replace(/\s+/g, '_')}_Report.xlsx`);
+    } catch (error) {
+      console.error('Errore nell\'esportazione Excel:', error);
+      alert('Errore durante l\'esportazione dei dati.');
+    }
+  };
 
   const getChartData = (test: SensoryTest) => {
     const testResults = results.filter(r => r.testId === test.id);
     if (testResults.length === 0) return [];
+    
     return test.config.attributes.map(attr => {
       const item: any = { attribute: attr.name };
+      
       test.config.products.forEach(prod => {
-        let sum = 0, count = 0;
+        let sum = 0;
+        let count = 0;
+        
         testResults.forEach(res => {
           const val = res.qdaRatings?.[`${prod.code}_${attr.id}`] || 0;
-          if (val > 0) { sum += val; count++; }
+          if (val > 0) { 
+            sum += val; 
+            count++; 
+          }
         });
+        
         item[prod.name] = count > 0 ? parseFloat((sum / count).toFixed(2)) : 0;
       });
-      if (attr.referenceValue !== undefined) item['Riferimento'] = attr.referenceValue;
+      
+      // Aggiungi riferimento solo se esiste
+      if (attr.referenceValue !== undefined) {
+        item['Riferimento'] = attr.referenceValue;
+      }
+      
       return item;
     });
   };
 
   const handleAnalyze = async (test: SensoryTest) => {
-    setAnalysisLoading(true);
     const testResults = results.filter(r => r.testId === test.id);
-    const summary = `Analisi test "${test.name}" (${test.type}). Risposte totali: ${testResults.length}.`;
-    const analysis = await analyzeResults(test.name, test.type, summary);
-    setAiAnalysis(analysis);
-    setAnalysisLoading(false);
+    if (testResults.length === 0) {
+      alert("Nessun risultato disponibile per l'analisi.");
+      return;
+    }
+    
+    setAnalysisLoading(true);
+    try {
+      const summary = `Analisi test "${test.name}" (${test.type}). Risposte totali: ${testResults.length}.`;
+      const analysis = await analyzeResults(test.name, test.type, summary);
+      setAiAnalysis(analysis);
+    } catch (error) {
+      console.error('Errore nell\'analisi AI:', error);
+      alert("Errore nella generazione dell'analisi AI.");
+    } finally {
+      setAnalysisLoading(false);
+    }
   };
 
   const getMaxScale = (test: SensoryTest) => {
@@ -349,20 +498,28 @@ const handleExportExcel = (test: SensoryTest) => {
   };
 
   const handleDuplicateTest = (test: SensoryTest) => {
-    const newTest: SensoryTest = JSON.parse(JSON.stringify(test));
-    newTest.id = generateId();
-    newTest.name = `${test.name} (copy)`;
-    newTest.createdAt = new Date().toISOString();
-    // Keep status same as original or set to 'active'
-    newTest.status = test.status || 'active';
+    const newTest: SensoryTest = {
+      ...JSON.parse(JSON.stringify(test)),
+      id: generateId(),
+      name: `${test.name} (copy)`,
+      createdAt: new Date().toISOString(),
+      status: test.status || 'active'
+    };
+    
     onCreateTest(newTest);
+    alert('Test duplicato con successo!');
   };
 
   const handleEditClick = (test: SensoryTest) => {
-    setEditingId(test.id); setNewTestName(test.name); setNewTestType(test.type);
-    setProducts(test.config.products); setAttributes(test.config.attributes);
+    setEditingId(test.id); 
+    setNewTestName(test.name); 
+    setNewTestType(test.type);
+    setProducts(test.config.products); 
+    setAttributes(test.config.attributes);
     setRandomize(test.config.randomizePresentation || false); 
     setCorrectAnswerCode(test.config.correctOddSampleCode || '');
+    setProductDescForAi('');
+    setAiAnalysis(null);
     setView('CREATE');
   };
 
@@ -505,7 +662,7 @@ const handleExportExcel = (test: SensoryTest) => {
                   </div>
                   <div className="flex flex-wrap gap-3">
                       {attributes.map((attr, idx) => (
-                          <div key={idx} className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border-2 border-slate-100 shadow-sm">
+                          <div key={attr.id} className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border-2 border-slate-100 shadow-sm">
                               <div className="text-left">
                                   <div className="font-black text-slate-800 text-sm">{attr.name}</div>
                                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{attr.scaleType}</div>

@@ -53,6 +53,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [currentDominant, setCurrentDominant] = useState<string | null>(null);
   const [currentIntensity, setCurrentIntensity] = useState(1);
   const [tiHistory, setTiHistory] = useState<{t: number, v: number}[]>([]); 
+  const [selectedTiAttribute, setSelectedTiAttribute] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const prevTestIdRef = useRef<string | null>(null);
 
@@ -85,6 +86,11 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         setProducts(initialProducts);
         setCurrentProductIndex(0);
         prevTestIdRef.current = test.id;
+
+        // Se è TI, imposta il primo attributo come selezionato
+        if (test.type === TestType.TIME_INTENSITY && test.config.attributes.length > 0) {
+          setSelectedTiAttribute(test.config.attributes[0].id);
+        }
 
         // Reset state and pre-fill ratings to prevent saving 0 for untouched sliders
         setResult(prev => {
@@ -154,37 +160,41 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     };
   }, [isTimerRunning, test.config.durationSeconds]);
 
-// TI logging effect
-useEffect(() => {
-  const logInterval = 0.5; // Log ogni 0.5 secondi
-  let lastLoggedTime = -logInterval;
-  
-  if (test.type === TestType.TIME_INTENSITY && isTimerRunning && products[currentProductIndex]) {
-    const currentProduct = products[currentProductIndex];
-    const currentTime = parseFloat(elapsedTime.toFixed(1));
+  // TI logging effect
+  useEffect(() => {
+    const logInterval = 0.5; // Log ogni 0.5 secondi
+    let lastLoggedTime = -logInterval;
     
-    if (currentTime >= lastLoggedTime + logInterval) {
-      const logKey = currentProduct.code;
-      const newEntry: TILogEntry = { 
-        time: currentTime, 
-        intensity: currentIntensity,
-        attributeId: test.config.attributes.length > 0 ? test.config.attributes[0].name : 'Intensità' // Aggiunto
-      };
-     
-      setTiHistory(prev => [...prev, { t: currentTime, v: currentIntensity }]);
-     
-      setResult(prev => ({
-        ...prev,
-        tiLogs: { 
-          ...prev.tiLogs, 
-          [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry] 
+    if (test.type === TestType.TIME_INTENSITY && isTimerRunning && products[currentProductIndex] && selectedTiAttribute) {
+      const checkAndLog = () => {
+        const currentTime = parseFloat(elapsedTime.toFixed(1));
+        if (currentTime >= lastLoggedTime + logInterval) {
+          const currentProduct = products[currentProductIndex];
+          const logKey = currentProduct.code;
+          const newEntry: TILogEntry = { 
+            time: currentTime, 
+            intensity: currentIntensity,
+            attributeId: selectedTiAttribute
+          };
+         
+          setTiHistory(prev => [...prev, { t: currentTime, v: currentIntensity }]);
+         
+          setResult(prev => ({
+            ...prev,
+            tiLogs: { 
+              ...prev.tiLogs, 
+              [logKey]: [...(prev.tiLogs?.[logKey] || []), newEntry] 
+            }
+          }));
+          
+          lastLoggedTime = currentTime;
         }
-      }));
+      };
       
-      lastLoggedTime = currentTime;
+      checkAndLog();
     }
-  }
-}, [elapsedTime, test.type, isTimerRunning, currentProductIndex, products, currentIntensity, test.config.attributes]);
+  }, [elapsedTime, test.type, isTimerRunning, currentProductIndex, products, currentIntensity, selectedTiAttribute]);
+
   const currentProduct = products[currentProductIndex];
 
   const handleNextProduct = () => {
@@ -196,6 +206,10 @@ useEffect(() => {
       setCurrentDominant(null);
       setCurrentIntensity(1);
       setTiHistory([]);
+      // Reset attributo TI se necessario
+      if (test.type === TestType.TIME_INTENSITY && test.config.attributes.length > 0) {
+        setSelectedTiAttribute(test.config.attributes[0].id);
+      }
       if (timerRef.current) clearInterval(timerRef.current);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
@@ -450,7 +464,7 @@ useEffect(() => {
     const handleRemoveAttribute = (attr: string) => {
       const newAttrs = customAttributes.filter(a => a !== attr);
       setCustomAttributes(newAttrs);
-      localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(newAttrs));
+        localStorage.setItem(`flashProfile_${test.id}_attributes`, JSON.stringify(newAttrs));
     };
     
     const handleDragStart = (attr: string) => {
@@ -794,90 +808,98 @@ useEffect(() => {
     );
   };
 
-const renderTimeIntensity = () => {
-  if (!currentProduct) return null;
-  
-  // Stato locale per attributo selezionato
-  const [selectedAttr, setSelectedAttr] = useState<string | null>(
-    test.config.attributes.length > 0 ? test.config.attributes[0].id : null
-  );
-  
-  return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8 p-6 bg-blue-50 border border-blue-100 rounded-3xl flex justify-between items-center shadow-sm">
-        <div>
-          <p className="text-sm text-blue-600 font-bold uppercase tracking-widest mb-1">Time Intensity</p>
-          <p className="text-3xl font-black text-blue-900">Campione: {currentProduct.code}</p>
-        </div>
-        <div className="text-right">
-          <div className="text-xs text-blue-400 font-bold uppercase mb-1">Timer</div>
-          <div className="text-3xl font-black text-blue-900">{elapsedTime.toFixed(1)}s</div>
-        </div>
-      </div>
-      
-      <div className="bg-white p-8 rounded-3xl border border-slate-200 mb-8">
-        <div className="text-center mb-10">
-          <h2 className="text-4xl font-black text-slate-900 mb-3">Traccia l'intensità nel tempo</h2>
-          <p className="text-slate-600">Scegli l'attributo e regola lo slider mentre assaggi</p>
-        </div>
-        
-        {/* Selezione Attributo */}
-        <div className="mb-8">
-          <label className="block text-lg font-bold text-slate-700 mb-4">Seleziona Attributo da Tracciare:</label>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {test.config.attributes.map((attr) => (
-              <button
-                key={attr.id}
-                onClick={() => setSelectedAttr(attr.id)}
-                className={`p-4 rounded-xl border-2 font-bold transition-all ${
-                  selectedAttr === attr.id
-                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg'
-                    : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
-                }`}
-              >
-                {attr.name}
-              </button>
-            ))}
+  const renderTimeIntensity = () => {
+    if (!currentProduct) return null;
+    
+    // Se non c'è un attributo selezionato, prendi il primo
+    if (!selectedTiAttribute && test.config.attributes.length > 0) {
+      setSelectedTiAttribute(test.config.attributes[0].id);
+    }
+    
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8 p-6 bg-blue-50 border border-blue-100 rounded-3xl flex justify-between items-center shadow-sm">
+          <div>
+            <p className="text-sm text-blue-600 font-bold uppercase tracking-widest mb-1">Time Intensity</p>
+            <p className="text-3xl font-black text-blue-900">Campione: {currentProduct.code}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-blue-400 font-bold uppercase mb-1">Timer</div>
+            <div className="text-3xl font-black text-blue-900">{elapsedTime.toFixed(1)}s</div>
           </div>
         </div>
         
-        <div className="mb-8">
-          <div className="flex justify-center gap-4 mb-6">
-            <button
-              onClick={startTimer}
-              disabled={isTimerRunning || !selectedAttr}
-              className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
-            >
-              <Play size={20} /> {isTimerRunning ? 'Tracciamento attivo...' : 'Inizia Tracciamento'}
-            </button>
-            <button
-              onClick={stopTimer}
-              disabled={!isTimerRunning}
-              className="px-8 py-4 bg-red-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
-            >
-              <Square size={20} /> Ferma
-            </button>
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 mb-8">
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 mb-3">Traccia l'intensità nel tempo</h2>
+            <p className="text-slate-600">Regola lo slider mentre assaggi per tracciare l'evoluzione dell'intensità</p>
           </div>
           
-          {selectedAttr && (
-            <div className="text-center mb-6 bg-blue-50 p-4 rounded-2xl">
-              <div className="text-blue-700 font-bold">
-                Tracciamento: <span className="text-blue-900">{test.config.attributes.find(a => a.id === selectedAttr)?.name}</span>
+          {/* SELEZIONE ATTRIBUTO */}
+          {test.config.attributes.length > 1 && (
+            <div className="mb-8">
+              <label className="block text-lg font-bold text-slate-700 mb-4">Seleziona Attributo da Tracciare:</label>
+              <div className="flex flex-wrap gap-3">
+                {test.config.attributes.map((attr) => (
+                  <button
+                    key={attr.id}
+                    onClick={() => setSelectedTiAttribute(attr.id)}
+                    className={`px-6 py-3 rounded-xl border-2 font-bold transition-all ${
+                      selectedTiAttribute === attr.id
+                        ? 'bg-blue-600 border-blue-600 text-white'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-300'
+                    }`}
+                  >
+                    {attr.name}
+                  </button>
+                ))}
               </div>
             </div>
           )}
-        </div>
-        
-        {/* Slider per intensità */}
-        {selectedAttr && (
-          <div className="mb-10">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <label className="text-lg font-bold text-slate-700">Intensità corrente:</label>
-                <div className="text-sm text-slate-500">
-                  {test.config.attributes.find(a => a.id === selectedAttr)?.name}
+          
+          {/* Attributo selezionato */}
+          {selectedTiAttribute && (
+            <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-bold text-blue-600 uppercase tracking-widest">Attributo Tracciato:</span>
+                  <span className="ml-3 text-xl font-black text-blue-900">
+                    {test.config.attributes.find(a => a.id === selectedTiAttribute)?.name}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-sm font-bold text-blue-600 uppercase tracking-widest">Progresso:</span>
+                  <span className="ml-3 text-xl font-black text-blue-900">
+                    {Math.round((elapsedTime / (test.config.durationSeconds || 60)) * 100)}%
+                  </span>
                 </div>
               </div>
+            </div>
+          )}
+          
+          <div className="mb-8">
+            <div className="flex justify-center gap-4 mb-6">
+              <button
+                onClick={startTimer}
+                disabled={isTimerRunning}
+                className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+              >
+                <Play size={20} /> {isTimerRunning ? 'Tracciamento attivo...' : 'Inizia Tracciamento'}
+              </button>
+              <button
+                onClick={stopTimer}
+                disabled={!isTimerRunning}
+                className="px-8 py-4 bg-red-600 text-white rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+              >
+                <Square size={20} /> Ferma
+              </button>
+            </div>
+          </div>
+          
+          {/* Slider per intensità */}
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <label className="text-lg font-bold text-slate-700">Intensità corrente:</label>
               <div className="text-3xl font-black text-blue-600">{currentIntensity}</div>
             </div>
             
@@ -896,60 +918,58 @@ const renderTimeIntensity = () => {
               <span>100 - Massima</span>
             </div>
           </div>
-        )}
-        
-        {/* Grafico storico (semplificato) */}
-        {tiHistory.length > 0 && (
-          <div className="bg-slate-50 p-6 rounded-2xl">
-            <h3 className="font-bold text-slate-800 mb-4">Andamento registrato:</h3>
-            <div className="h-32 relative">
-              <div className="absolute inset-0 flex items-end">
-                {tiHistory.map((point, index) => (
-                  <div
-                    key={index}
-                    className="absolute bottom-0 w-2 bg-blue-600 rounded-t"
-                    style={{
-                      left: `${(point.t / (test.config.durationSeconds || 60)) * 100}%`,
-                      height: `${point.v}%`
-                    }}
-                  />
-                ))}
+          
+          {/* Grafico storico (semplificato) */}
+          {tiHistory.length > 0 && (
+            <div className="bg-slate-50 p-6 rounded-2xl">
+              <h3 className="font-bold text-slate-800 mb-4">Andamento registrato:</h3>
+              <div className="h-32 relative">
+                <div className="absolute inset-0 flex items-end">
+                  {tiHistory.map((point, index) => (
+                    <div
+                      key={index}
+                      className="absolute bottom-0 w-2 bg-blue-600 rounded-t"
+                      style={{
+                        left: `${(point.t / (test.config.durationSeconds || 60)) * 100}%`,
+                        height: `${point.v}%`
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-      
-      <div className="flex justify-between">
-        <button
-          onClick={() => {
-            setTiHistory([]);
-            setCurrentIntensity(1);
-            setElapsedTime(0);
-            setIsTimerRunning(false);
-            if (timerRef.current) clearInterval(timerRef.current);
-            const logKey = currentProduct.code;
-            setResult(prev => ({
-              ...prev,
-              tiLogs: { ...prev.tiLogs, [logKey]: [] }
-            }));
-          }}
-          className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
-        >
-          Reset
-        </button>
+          )}
+        </div>
         
-        <button 
-          onClick={handleNextProduct}
-          disabled={!selectedAttr || tiHistory.length === 0}
-          className="px-8 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 shadow-lg disabled:opacity-50"
-        >
-          {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Completa Test'}
-        </button>
+        <div className="flex justify-between">
+          <button
+            onClick={() => {
+              setTiHistory([]);
+              setCurrentIntensity(1);
+              setElapsedTime(0);
+              setIsTimerRunning(false);
+              if (timerRef.current) clearInterval(timerRef.current);
+              const logKey = currentProduct.code;
+              setResult(prev => ({
+                ...prev,
+                tiLogs: { ...prev.tiLogs, [logKey]: [] }
+              }));
+            }}
+            className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+          >
+            Reset
+          </button>
+          
+          <button 
+            onClick={handleNextProduct}
+            className="px-8 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 shadow-lg"
+          >
+            {currentProductIndex < products.length - 1 ? 'Prossimo Campione' : 'Completa Test'}
+          </button>
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   const renderCATA = () => {
     if (!currentProduct) return null;
