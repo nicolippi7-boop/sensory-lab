@@ -235,10 +235,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         Metodo: test.type 
       };
       
+      // AGGIUNGI NOTE GENERALI ALLA RIGA DI TESTATA
+      const commonHeadersWithNotes = {
+        ...commonHeaders,
+        Note_Generali: res.generalNotes || ''
+      };
+      
       if (test.type === TestType.TRIANGLE || test.type === TestType.PAIRED_COMPARISON) {
         const selection = test.type === TestType.TRIANGLE ? res.triangleSelection : res.pairedSelection;
         const baseRow = { 
-          ...commonHeaders, 
+          ...commonHeadersWithNotes, 
           Scelta_Giudice: selection || '-', 
           Risposta_Corretta: test.config.correctOddSampleCode || 'N/D', 
           Esito: (test.config.correctOddSampleCode && selection) ? 
@@ -270,13 +276,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           const logEntries = logs as any[];
           logEntries.forEach((log: any, idx: number) => {
             data.push({
-              ...commonHeaders,
+              ...commonHeadersWithNotes,
               Campione: prodCode,
               Tempo_Inizio_Test: tdsStartTime,
               Tempo_Fine_Test: tdsEndTime,
               Sequenza: idx + 1,
               Tempo_Registrazione: log.time ? `${log.time.toFixed(1)} s` : '-',
-              Attributo_Dominante: getAttributeName(log.attributeId) || '-'
+              Attributo_Dominante: getAttributeName(log.attributeId) || '-',
+              Note_Campione: res.productNotes?.[prodCode] || ''
             });
           });
         });
@@ -299,7 +306,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           // Esporta ogni punto di log con attributo specifico
           logEntries.forEach((log: any, idx: number) => {
             data.push({
-              ...commonHeaders,
+              ...commonHeadersWithNotes,
               Campione: prodCode,
               Codice_Campione: prodCode,
               Attributo_Tracciato_ID: trackedAttributeId,
@@ -308,7 +315,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               Tempo_Formattato: log.time ? `${log.time.toFixed(1)} s` : '0 s',
               Intensita: log.intensity || 0,
               Progresso_Tempo_Percentuale: `${((log.time || 0) / (test.config.durationSeconds || 60) * 100).toFixed(1)}%`,
-              Sequenza_Punto: idx + 1
+              Sequenza_Punto: idx + 1,
+              Note_Campione: res.productNotes?.[prodCode] || ''
             });
           });
           
@@ -335,7 +343,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }
             
             data.push({
-              ...commonHeaders,
+              ...commonHeadersWithNotes,
               Campione: prodCode,
               Codice_Campione: prodCode,
               Attributo_Tracciato_Nome: trackedAttributeName,
@@ -348,7 +356,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               Area_Sotto_Curva: areaUnderCurve.toFixed(2),
               Durata_Totale: `${duration} s`,
               Punti_Rilevati: logEntries.length,
-              Frequenza_Campionamento: `${(logEntries.length / duration).toFixed(2)} Hz`
+              Frequenza_Campionamento: `${(logEntries.length / duration).toFixed(2)} Hz`,
+              Note_Campione: res.productNotes?.[prodCode] || ''
             });
           }
         });
@@ -396,7 +405,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         // Per ogni prodotto, crea una riga con tutti gli attributi
         test.config.products.forEach(prod => {
           const row: any = { 
-            ...commonHeaders, 
+            ...commonHeadersWithNotes, 
             Prodotto: prod.name, 
             Codice: prod.code 
           };
@@ -413,13 +422,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             row[`STD_${stdAttr.name}`] = res.qdaRatings?.[stdKey] || 0;
           });
           
+          // Aggiungi note specifiche del prodotto
+          row['Note_Campione'] = res.productNotes?.[prod.code] || '';
+          
           data.push(row);
         });
         
         // Aggiungi anche una riga con la lista degli attributi personalizzati del giudice
         if (res.flashAttributes && res.flashAttributes.length > 0) {
           data.push({
-            ...commonHeaders,
+            ...commonHeadersWithNotes,
             Prodotto: 'ATTRIBUTI_PERSONALIZZATI',
             Codice: 'LISTA',
             Attributi_Personali: res.flashAttributes.join(', ')
@@ -429,23 +441,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         Object.entries(res.nappingData || {}).forEach(([code, coords]) => { 
           const c = coords as { x: number; y: number }; 
           data.push({ 
-            ...commonHeaders, 
+            ...commonHeadersWithNotes, 
             Codice_Campione: code, 
             Coordinata_X: c.x.toFixed(2), 
-            Coordinata_Y: c.y.toFixed(2) 
+            Coordinata_Y: c.y.toFixed(2),
+            Note_Campione: res.productNotes?.[code] || ''
           }); 
         });
       } else if (test.type === TestType.SORTING) {
         Object.entries(res.sortingGroups || {}).forEach(([code, group]) => { 
           data.push({ 
-            ...commonHeaders, 
+            ...commonHeadersWithNotes, 
             Codice_Campione: code, 
-            Gruppo_Assegnato: group as string
+            Gruppo_Assegnato: group as string,
+            Note_Campione: res.productNotes?.[code] || ''
           }); 
         });
       } else if (test.type === TestType.CATA) {
         test.config.products.forEach(prod => {
-          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+          const row: any = { 
+            ...commonHeadersWithNotes, 
+            Prodotto: prod.name, 
+            Codice: prod.code,
+            Note_Campione: res.productNotes?.[prod.code] || ''
+          };
           test.config.attributes.forEach(attr => {
             const key = `${prod.code}_${attr.id}`;
             row[attr.name] = res.cataSelection?.includes(key) ? 1 : 0;
@@ -454,7 +473,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         });
       } else if (test.type === TestType.RATA) {
         test.config.products.forEach(prod => {
-          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+          const row: any = { 
+            ...commonHeadersWithNotes, 
+            Prodotto: prod.name, 
+            Codice: prod.code,
+            Note_Campione: res.productNotes?.[prod.code] || ''
+          };
           test.config.attributes.forEach(attr => {
             const key = `${prod.code}_${attr.id}`;
             row[attr.name] = res.rataSelection?.[key] || 0;
@@ -463,12 +487,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         });
       } else if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
         test.config.products.forEach(prod => {
-          const row: any = { ...commonHeaders, Prodotto: prod.name, Codice: prod.code };
+          const row: any = { 
+            ...commonHeadersWithNotes, 
+            Prodotto: prod.name, 
+            Codice: prod.code,
+            Note_Campione: res.productNotes?.[prod.code] || ''
+          };
           test.config.attributes.forEach(attr => {
             const key = `${prod.code}_${attr.id}`;
             row[attr.name] = res.qdaRatings?.[key] || 0;
           });
           data.push(row);
+        });
+      }
+      
+      // Aggiungi una riga separata per le note generali se sono presenti
+      if (res.generalNotes && res.generalNotes.trim() !== '') {
+        data.push({
+          Giudice: res.judgeName,
+          Data_Invio: res.submittedAt,
+          Test: test.name,
+          Metodo: 'NOTE GENERALI',
+          Prodotto: 'NOTE',
+          Codice: 'GENERALI',
+          Note_Generali: res.generalNotes
         });
       }
     });

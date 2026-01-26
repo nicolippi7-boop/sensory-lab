@@ -87,6 +87,8 @@ export interface JudgeResult {
   tdsStartTime?: string;
   tdsEndTime?: string;
   tiLogs?: Record<string, TILogEntry[]>;
+generalNotes?: string;
+  productNotes?: { [key: string]: string };
 }
 
 export type ViewState = 'HOME' | 'ADMIN_DASHBOARD' | 'CREATE_TEST' | 'TEST_RESULTS' | 'JUDGE_LOGIN' | 'JUDGE_RUNNER';

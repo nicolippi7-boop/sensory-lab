@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, JudgeResult, TDSLogEntry, Product, TILogEntry, Attribute, TriangleResponse } from '../types';
-import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Eye, Grid, List, Tag, Star, X } from 'lucide-react';
+import { Play, Square, CheckCircle, ArrowRight, MousePointer2, Info, Clock, MapPin, RefreshCcw, Target, Layers, Eye, Grid, List, Tag, Star, X, Pencil } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 interface TestRunnerProps {
@@ -25,6 +25,12 @@ const shuffleArray = <T,>(array: T[]): T[] => {
 export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onComplete, onExit }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
+  
+  // NUOVI STATI PER LE NOTE
+  const [generalNotes, setGeneralNotes] = useState('');
+  const [productNotes, setProductNotes] = useState<{ [key: string]: string }>({});
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  
   const [result, setResult] = useState<Partial<JudgeResult>>({
     testId: test.id,
     judgeName,
@@ -38,6 +44,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     flashAttributes: [],
     tdsStartTime: undefined,
     tdsEndTime: undefined,
+    // INIZIALIZZA I NUOVI CAMPI NOTE
+    generalNotes: '',
+    productNotes: {},
   });
 
   const [selectedOne, setSelectedOne] = useState<string | null>(null);
@@ -105,6 +114,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                 nappingData: {},
                 sortingGroups: {},
                 flashAttributes: [],
+                generalNotes: '',
+                productNotes: {},
             };
 
             if (test.type === TestType.QDA || test.type === TestType.HEDONIC) {
@@ -198,6 +209,25 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   }, [elapsedTime, test.type, isTimerRunning, currentProductIndex, products, currentIntensity, selectedTiAttribute]);
 
   const currentProduct = products[currentProductIndex];
+
+  // FUNZIONI PER GESTIRE LE NOTE
+  const handleGeneralNotesChange = (notes: string) => {
+    setGeneralNotes(notes);
+    setResult(prev => ({ ...prev, generalNotes: notes }));
+  };
+
+  const handleProductNotesChange = (productCode: string, notes: string) => {
+    setProductNotes(prev => ({ ...prev, [productCode]: notes }));
+    setResult(prev => ({ 
+      ...prev, 
+      productNotes: { ...prev.productNotes, [productCode]: notes } 
+    }));
+  };
+
+  const getCurrentProductNotes = () => {
+    if (!currentProduct) return '';
+    return productNotes[currentProduct.code] || '';
+  };
 
   const handleNextProduct = () => {
     if (currentProductIndex < products.length - 1) {
@@ -385,6 +415,90 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     }));
   };
 
+  // ================ MODAL NOTE ================
+  const renderNotesModal = () => {
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-2xl font-black text-slate-900">Note e Osservazioni</h3>
+            <button 
+              onClick={() => setShowNotesModal(false)}
+              className="text-slate-400 hover:text-slate-700"
+            >
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="space-y-8">
+            {/* Note generali per l'intero test */}
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-3">
+                Note generali sul test
+                <span className="text-slate-400 text-xs font-normal ml-2">(opzionale)</span>
+              </label>
+              <textarea
+                value={generalNotes}
+                onChange={(e) => handleGeneralNotesChange(e.target.value)}
+                placeholder="Scrivi qui eventuali osservazioni generali sull'intera sessione di assaggio..."
+                className="w-full h-32 p-4 border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none resize-none"
+                rows={4}
+              />
+              <div className="text-xs text-slate-400 mt-2">
+                {generalNotes.length}/1000 caratteri
+              </div>
+            </div>
+            
+            {/* Note specifiche per ogni prodotto */}
+            <div>
+              <h4 className="text-lg font-bold text-slate-800 mb-4">Note per i campioni:</h4>
+              <div className="space-y-6">
+                {products.map((product) => (
+                  <div key={product.id} className="border border-slate-100 rounded-2xl p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                        <span className="font-black text-indigo-700">{product.code}</span>
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-800">{product.name}</h5>
+                        <p className="text-sm text-slate-500">Campione {product.code}</p>
+                      </div>
+                    </div>
+                    <textarea
+                      value={productNotes[product.code] || ''}
+                      onChange={(e) => handleProductNotesChange(product.code, e.target.value)}
+                      placeholder={`Note specifiche per ${product.name} (${product.code})...`}
+                      className="w-full h-24 p-3 border border-slate-200 rounded-xl focus:border-indigo-300 outline-none resize-none"
+                      rows={3}
+                    />
+                    <div className="text-xs text-slate-400 mt-2 text-right">
+                      {(productNotes[product.code] || '').length}/500 caratteri
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
+            <button
+              onClick={() => setShowNotesModal(false)}
+              className="px-6 py-3 border-2 border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+            >
+              Chiudi
+            </button>
+            <button
+              onClick={() => setShowNotesModal(false)}
+              className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700"
+            >
+              Salva Note
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ================ RENDER FUNCTIONS ================
 
   const renderHedonic = () => {
@@ -453,6 +567,24 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                 </div>
               );
             })}
+          </div>
+          
+          {/* Aggiungi area note per campione corrente */}
+          <div className="mt-8 mb-8">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <button
+                onClick={() => setShowNotesModal(true)}
+                className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-bold"
+              >
+                <Pencil size={16} />
+                Aggiungi note per questo campione
+                {productNotes[currentProduct.code] && (
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                    ✓ Note salvate
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
           
           <div className="mt-12 mb-32 flex justify-center">
@@ -1609,6 +1741,25 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             </div>
           ))}
         </div>
+        
+        {/* Aggiungi area note per campione corrente */}
+        <div className="mt-8 mb-8">
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+            <button
+              onClick={() => setShowNotesModal(true)}
+              className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-bold"
+            >
+              <Pencil size={16} />
+              Aggiungi note per questo campione
+              {productNotes[currentProduct.code] && (
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                  ✓ Note salvate
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+        
         <div className="mt-12 mb-32 flex justify-center">
           <button onClick={handleNextProduct} className="px-12 py-5 bg-indigo-600 text-white font-black rounded-3xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all flex items-center gap-3 text-xl active:scale-95 group"> {currentProductIndex < products.length - 1 ? 'PROSSIMO CAMPIONE' : 'INVIA RISULTATI'} <ArrowRight size={28} className="group-hover:translate-x-2 transition-transform" /> </button>
         </div>
@@ -1941,6 +2092,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      {/* Modal Note */}
+      {showNotesModal && renderNotesModal()}
+      
       {/* Header */}
       <div className="max-w-6xl mx-auto mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1950,6 +2104,19 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           </div>
           
           <div className="flex gap-3">
+            <button
+              onClick={() => setShowNotesModal(true)}
+              className="px-4 py-2 border-2 border-indigo-100 bg-indigo-50 text-indigo-600 rounded-xl font-bold hover:bg-indigo-100 flex items-center gap-2"
+            >
+              <Pencil size={18} />
+              Note
+              {Object.keys(productNotes).length > 0 && (
+                <span className="bg-indigo-600 text-white text-xs px-2 py-1 rounded-full">
+                  {Object.keys(productNotes).length}
+                </span>
+              )}
+            </button>
+            
             <button
               onClick={() => {
                 if (window.confirm("Vuoi uscire dal test? I progressi verranno persi.")) {
