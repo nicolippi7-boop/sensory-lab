@@ -71,24 +71,51 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const [customAttributes, setCustomAttributes] = useState<string[]>([]);
   const [newAttribute, setNewAttribute] = useState('');
 
-  // Inizializza attributi da localStorage per Flash Profile
+  // Chiave univoca per il salvataggio
+  const storageKey = `sensoryTest_${test.id}_${judgeName}`;
+
+  // Carica lo stato salvato all'inizio
   useEffect(() => {
-    if (test.type === TestType.FLASH_PROFILE) {
-      const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_${judgeName}_attributes`);
-      if (savedAttrs) {
-        try {
-          const parsed = JSON.parse(savedAttrs);
-          if (Array.isArray(parsed)) {
-            setCustomAttributes(parsed);
-          }
-        } catch (e) {
-          console.error('Errore caricamento attributi salvati', e);
+    const savedState = localStorage.getItem(storageKey);
+    if (savedState) {
+      try {
+        const parsed = JSON.parse(savedState);
+        
+        // Verifica che lo stato sia valido per questo test
+        if (parsed.testId === test.id && parsed.judgeName === judgeName) {
+          setProducts(parsed.products || []);
+          setCurrentProductIndex(parsed.currentProductIndex || 0);
+          setResult(parsed.result || {});
+          setSelectedOne(parsed.selectedOne || null);
+          setTriangleStep(parsed.triangleStep || 'selection');
+          setTriangleResponse(parsed.triangleResponse || {
+            selectedCode: '',
+            sensoryCategoryType: 'aroma',
+            description: '',
+            intensity: 1,
+            isForcedResponse: false
+          });
+          setIsTimerRunning(false); // Non riprendere il timer
+          setElapsedTime(parsed.elapsedTime || 0);
+          setCurrentDominant(parsed.currentDominant || null);
+          setCurrentIntensity(parsed.currentIntensity || 1);
+          setTiHistory(parsed.tiHistory || []);
+          setSelectedTiAttribute(parsed.selectedTiAttribute || null);
+          setPlacedProducts(parsed.placedProducts || []);
+          setCustomAttributes(parsed.customAttributes || []);
+          setNewAttribute(parsed.newAttribute || '');
+          setGeneralNotes(parsed.generalNotes || '');
+          setProductNotes(parsed.productNotes || {});
+          
+          prevTestIdRef.current = test.id;
+          return;
         }
+      } catch (e) {
+        console.error('Errore nel caricamento dello stato salvato:', e);
       }
     }
-  }, [test.id, test.type, judgeName]);
-
-  useEffect(() => {
+    
+    // Se non c'è stato salvato, inizializza normalmente
     if (prevTestIdRef.current !== test.id) {
         const initialProducts = test.config.randomizePresentation
             ? shuffleArray(test.config.products)
@@ -140,7 +167,106 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             return baseResult;
         });
     }
-  }, [test.id, test.config.products, test.config.randomizePresentation, test.type, test.config.attributes]);
+  }, [test.id, test.config.products, test.config.randomizePresentation, test.type, test.config.attributes, judgeName, storageKey]);
+
+  // Salva lo stato ad ogni cambiamento
+  useEffect(() => {
+    const stateToSave = {
+      testId: test.id,
+      judgeName,
+      products,
+      currentProductIndex,
+      result,
+      selectedOne,
+      triangleStep,
+      triangleResponse,
+      isTimerRunning,
+      elapsedTime,
+      currentDominant,
+      currentIntensity,
+      tiHistory,
+      selectedTiAttribute,
+      placedProducts,
+      customAttributes,
+      newAttribute,
+      generalNotes,
+      productNotes,
+    };
+    
+    localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+  }, [
+    test.id,
+    judgeName,
+    products,
+    currentProductIndex,
+    result,
+    selectedOne,
+    triangleStep,
+    triangleResponse,
+    isTimerRunning,
+    elapsedTime,
+    currentDominant,
+    currentIntensity,
+    tiHistory,
+    selectedTiAttribute,
+    placedProducts,
+    customAttributes,
+    newAttribute,
+    generalNotes,
+    productNotes,
+    storageKey
+  ]);
+
+  // Salva anche prima dell'unload della pagina
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const stateToSave = {
+        testId: test.id,
+        judgeName,
+        products,
+        currentProductIndex,
+        result,
+        selectedOne,
+        triangleStep,
+        triangleResponse,
+        isTimerRunning,
+        elapsedTime,
+        currentDominant,
+        currentIntensity,
+        tiHistory,
+        selectedTiAttribute,
+        placedProducts,
+        customAttributes,
+        newAttribute,
+        generalNotes,
+        productNotes,
+      };
+      
+      localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [test.id, judgeName, products, currentProductIndex, result, selectedOne, triangleStep, triangleResponse, isTimerRunning, elapsedTime, currentDominant, currentIntensity, tiHistory, selectedTiAttribute, placedProducts, customAttributes, newAttribute, generalNotes, productNotes, storageKey]);
+
+  // Inizializza attributi da localStorage per Flash Profile
+  useEffect(() => {
+    if (test.type === TestType.FLASH_PROFILE && customAttributes.length === 0) {
+      const savedAttrs = localStorage.getItem(`flashProfile_${test.id}_${judgeName}_attributes`);
+      if (savedAttrs) {
+        try {
+          const parsed = JSON.parse(savedAttrs);
+          if (Array.isArray(parsed)) {
+            setCustomAttributes(parsed);
+          }
+        } catch (e) {
+          console.error('Errore caricamento attributi salvati', e);
+        }
+      }
+    }
+  }, [test.id, test.type, judgeName, customAttributes.length]);
 
   useEffect(() => {
     return () => { 
@@ -250,6 +376,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   };
 
   const finalizeTDSAndSubmit = () => {
+    // Pulisci lo stato salvato
+    localStorage.removeItem(storageKey);
+    
     if (test.type === TestType.TDS && currentProduct) {
       const logKey = currentProduct.code;
       const currentLogs = result.tdsLogs?.[logKey] || [];
@@ -280,6 +409,9 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   };
 
   const submitAll = () => {
+    // Pulisci lo stato salvato
+    localStorage.removeItem(storageKey);
+    
     const finalResult: JudgeResult = {
       ...result as JudgeResult,
       id: generateId(),
@@ -519,7 +651,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
         <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-200">
           <div className="text-center mb-10">
             <h2 className="text-4xl font-black text-slate-900 mb-3">Valutazione Edonica</h2>
-            <p className="text-slate-600 text-lg">Quanto ti piace questo prodotto?</p>
+            <p className="text-slate-600">Quanto ti piace questo prodotto?</p>
           </div>
           
           <div className="space-y-8">
@@ -2030,6 +2162,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   triangleSelection: selectedOne || '',
                   triangleResponse
                 };
+                localStorage.removeItem(storageKey); // Pulisci stato salvato
                 onComplete(final);
               }}
               className="flex-1 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-all shadow-lg"
@@ -2055,6 +2188,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       </div>
       <button disabled={!selectedOne} onClick={() => {
           const final = { ...result as JudgeResult, id: generateId(), submittedAt: new Date().toISOString(), pairedSelection: selectedOne || '' };
+          localStorage.removeItem(storageKey); // Pulisci stato salvato
           onComplete(final);
       }} className="mt-8 px-10 py-4 bg-slate-900 text-white font-bold rounded-2xl disabled:opacity-50 hover:bg-slate-800 shadow-xl transition-all"> Conferma Scelta </button>
     </div>
