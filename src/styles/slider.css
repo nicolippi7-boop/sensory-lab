@@ -19,6 +19,40 @@ input[type="range"] {
 }
 
 /* ============================================
+   TOUCH DRAG & DROP FEEDBACK
+   ============================================ */
+[data-product-code].touch-hover {
+  @apply border-purple-500 bg-purple-100 shadow-lg;
+}
+
+/* Feedback visuale durante selezione attributo */
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Migliora la reattività del touch su device datati */
+* {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Permetti il drag su elementi specifici */
+[draggable="true"] {
+  -webkit-user-select: none;
+  -webkit-user-drag: element;
+}
+
+/* ============================================
    WEBKIT (Chrome, Safari, Edge) - THUMB
    ============================================ */
 input[type="range"]::-webkit-slider-thumb {

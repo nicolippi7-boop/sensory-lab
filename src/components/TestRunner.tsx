@@ -733,7 +733,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const renderFlashProfile = () => {
     const [draggingAttr, setDraggingAttr] = useState<string | null>(null);
     const [sortingMode, setSortingMode] = useState<'grid' | 'list'>('grid');
-    const [touchData, setTouchData] = useState<{ attr: string; x: number; y: number } | null>(null);
+    const [selectedAttrForAssign, setSelectedAttrForAssign] = useState<string | null>(null);
     
     const handleAddCustomAttribute = () => {
       if (newAttribute.trim() && !customAttributes.includes(newAttribute.trim())) {
@@ -766,9 +766,24 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     };
     
     const handleTouchStart = (attr: string, e: React.TouchEvent) => {
+      e.preventDefault();
       setDraggingAttr(attr);
-      if (e.touches[0]) {
-        setTouchData({ attr, x: e.touches[0].clientX, y: e.touches[0].clientY });
+      setSelectedAttrForAssign(attr);
+      // Haptic feedback se disponibile
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    };
+    
+    const handleTouchMove = (e: React.TouchEvent) => {
+      if (draggingAttr && e.touches[0]) {
+        const touch = e.touches[0];
+        const element = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+        
+        // Cambia colore del feedback se sopra una zona di drop
+        if (element && element.closest('[data-product-code]')) {
+          element.closest('[data-product-code]')?.classList.add('touch-hover');
+        }
       }
     };
     
@@ -777,19 +792,31 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       
       const touch = e.changedTouches[0];
       const dropZone = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      const productContainer = dropZone?.closest('[data-product-code]');
       
-      // Verifica se il rilascio è su una zona di drop (campione)
-      if (dropZone && dropZone.closest('[data-product-code]')) {
+      // Verifica se il rilascio è su una zona di drop (campione) con area di tolleranza
+      if (productContainer) {
         handleFlashIntensityChange(prodCode, draggingAttr, 50);
+        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
       }
       
+      document.querySelectorAll('[data-product-code]').forEach(el => {
+        el.classList.remove('touch-hover');
+      });
+      
       setDraggingAttr(null);
-      setTouchData(null);
+    };
+    
+    const handleAssignAttributeToProduct = (prodCode: string, attr: string) => {
+      handleFlashIntensityChange(prodCode, attr, 50);
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+      setSelectedAttrForAssign(null);
     };
     
     const handleDrop = (prodCode: string) => {
       if (draggingAttr) {
         handleFlashIntensityChange(prodCode, draggingAttr, 50);
+        setDraggingAttr(null);
       }
     };
     
@@ -862,21 +889,35 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   draggable
                   onDragStart={() => handleDragStart(attr)}
                   onTouchStart={(e) => handleTouchStart(attr, e)}
+                  onTouchMove={handleTouchMove}
                   onTouchEnd={(e) => {
-                    setDraggingAttr(null);
-                    setTouchData(null);
+                    handleTouchEnd('', e);
                   }}
-                  className={`p-3 rounded-xl border-2 border-dashed cursor-grab active:cursor-grabbing flex justify-between items-center touch-none select-none ${
-                    draggingAttr === attr ? 'opacity-50 border-purple-500 bg-purple-100' : ''
+                  onClick={() => {
+                    if (selectedAttrForAssign === attr) {
+                      setSelectedAttrForAssign(null);
+                    } else {
+                      setSelectedAttrForAssign(attr);
+                    }
+                  }}
+                  className={`p-4 rounded-xl border-2 cursor-grab active:cursor-grabbing flex justify-between items-center touch-none select-none transition-all ${
+                    draggingAttr === attr ? 'opacity-70 border-purple-600 bg-purple-200 scale-105 shadow-lg' : ''
+                  } ${
+                    selectedAttrForAssign === attr 
+                      ? 'border-purple-600 bg-purple-100 ring-2 ring-purple-400 shadow-md' 
+                      : 'border-dashed border-purple-200 bg-purple-50 hover:border-purple-400'
                   } ${
                     sortingMode === 'grid' 
-                      ? 'text-center bg-purple-50 border-purple-200 flex-col' 
-                      : 'bg-white border-slate-200'
+                      ? 'text-center flex-col' 
+                      : 'bg-white border-slate-200 hover:bg-purple-50'
                   }`}
                 >
                   <span className="font-bold text-slate-800">{attr}</span>
                   <button 
-                    onClick={() => handleRemoveAttribute(attr)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveAttribute(attr);
+                    }}
                     className="text-slate-400 hover:text-red-500 p-1"
                   >
                     <X size={16} />
@@ -894,6 +935,24 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
           
           {/* Area Campioni */}
           <div className="lg:col-span-2">
+            {/* Istruzioni per modalità alternativa */}
+            {selectedAttrForAssign && (
+              <div className="mb-6 p-4 bg-blue-50 border-2 border-blue-300 rounded-2xl shadow-md animation-pulse">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-blue-700 uppercase tracking-widest">Modalità Assegnazione</p>
+                    <p className="text-lg font-black text-blue-900">Seleziona campione per: <span className="text-purple-600">{selectedAttrForAssign}</span></p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedAttrForAssign(null)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700"
+                  >
+                    Annulla
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="bg-white p-6 rounded-3xl border border-slate-200 mb-8">
               <div className="flex items-center gap-3 mb-6">
                 <Layers className="text-purple-600" size={24} />
@@ -911,10 +970,13 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                     <div 
                       key={product.id}
                       data-product-code={product.code}
-                      className="p-6 rounded-2xl border-2 border-slate-100 hover:border-purple-200 transition-all"
+                      className={`p-6 rounded-2xl border-2 transition-all ${
+                        draggingAttr ? 'border-purple-400 bg-purple-50 shadow-md' : 'border-slate-100 hover:border-purple-200'
+                      }`}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => handleDrop(product.code)}
                       onTouchEnd={(e) => handleTouchEnd(product.code, e)}
+                      onTouchMove={handleTouchMove}
                     >
                       <div className="flex justify-between items-start mb-6">
                         <div>
@@ -984,14 +1046,29 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                         </div>
                       ) : (
                         <div 
-                          className="h-32 border-4 border-dashed border-slate-300 rounded-2xl flex items-center justify-center text-slate-400"
+                          className={`min-h-32 border-4 border-dashed rounded-2xl flex flex-col items-center justify-center text-slate-400 transition-all ${
+                            selectedAttrForAssign 
+                              ? 'border-purple-400 bg-purple-100 text-purple-600 cursor-pointer hover:bg-purple-200' 
+                              : 'border-slate-300'
+                          }`}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => handleDrop(product.code)}
                           onTouchEnd={(e) => handleTouchEnd(product.code, e)}
+                          onClick={() => {
+                            if (selectedAttrForAssign) {
+                              handleAssignAttributeToProduct(product.code, selectedAttrForAssign);
+                            }
+                          }}
                         >
                           <div className="text-center">
-                            <p className="font-bold mb-2">Trascina attributi qui</p>
-                            <p className="text-sm">Oppure clicca e trascina dagli attributi a sinistra</p>
+                            <p className="font-bold mb-2">
+                              {selectedAttrForAssign ? '👆 Tocca qui per assegnare' : 'Trascina attributi qui'}
+                            </p>
+                            <p className="text-sm">
+                              {selectedAttrForAssign 
+                                ? `Oppure continua il drag-and-drop` 
+                                : 'Oppure tocca un attributo a sinistra'}
+                            </p>
                           </div>
                         </div>
                       )}
