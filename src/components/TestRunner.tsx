@@ -733,6 +733,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
   const renderFlashProfile = () => {
     const [draggingAttr, setDraggingAttr] = useState<string | null>(null);
     const [sortingMode, setSortingMode] = useState<'grid' | 'list'>('grid');
+    const [touchData, setTouchData] = useState<{ attr: string; x: number; y: number } | null>(null);
     
     const handleAddCustomAttribute = () => {
       if (newAttribute.trim() && !customAttributes.includes(newAttribute.trim())) {
@@ -762,6 +763,28 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     
     const handleDragStart = (attr: string) => {
       setDraggingAttr(attr);
+    };
+    
+    const handleTouchStart = (attr: string, e: React.TouchEvent) => {
+      setDraggingAttr(attr);
+      if (e.touches[0]) {
+        setTouchData({ attr, x: e.touches[0].clientX, y: e.touches[0].clientY });
+      }
+    };
+    
+    const handleTouchEnd = (prodCode: string, e: React.TouchEvent) => {
+      if (!draggingAttr) return;
+      
+      const touch = e.changedTouches[0];
+      const dropZone = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      
+      // Verifica se il rilascio è su una zona di drop (campione)
+      if (dropZone && dropZone.closest('[data-product-code]')) {
+        handleFlashIntensityChange(prodCode, draggingAttr, 50);
+      }
+      
+      setDraggingAttr(null);
+      setTouchData(null);
     };
     
     const handleDrop = (prodCode: string) => {
@@ -838,7 +861,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   key={idx}
                   draggable
                   onDragStart={() => handleDragStart(attr)}
-                  className={`p-3 rounded-xl border-2 border-dashed cursor-grab active:cursor-grabbing flex justify-between items-center ${
+                  onTouchStart={(e) => handleTouchStart(attr, e)}
+                  onTouchEnd={(e) => {
+                    setDraggingAttr(null);
+                    setTouchData(null);
+                  }}
+                  className={`p-3 rounded-xl border-2 border-dashed cursor-grab active:cursor-grabbing flex justify-between items-center touch-none select-none ${
+                    draggingAttr === attr ? 'opacity-50 border-purple-500 bg-purple-100' : ''
+                  } ${
                     sortingMode === 'grid' 
                       ? 'text-center bg-purple-50 border-purple-200 flex-col' 
                       : 'bg-white border-slate-200'
@@ -880,9 +910,11 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   return (
                     <div 
                       key={product.id}
+                      data-product-code={product.code}
                       className="p-6 rounded-2xl border-2 border-slate-100 hover:border-purple-200 transition-all"
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => handleDrop(product.code)}
+                      onTouchEnd={(e) => handleTouchEnd(product.code, e)}
                     >
                       <div className="flex justify-between items-start mb-6">
                         <div>
@@ -955,6 +987,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                           className="h-32 border-4 border-dashed border-slate-300 rounded-2xl flex items-center justify-center text-slate-400"
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => handleDrop(product.code)}
+                          onTouchEnd={(e) => handleTouchEnd(product.code, e)}
                         >
                           <div className="text-center">
                             <p className="font-bold mb-2">Trascina attributi qui</p>
