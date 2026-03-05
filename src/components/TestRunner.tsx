@@ -761,8 +761,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
       setResult(prev => ({ ...prev, qdaRatings: newRatings }));
     };
     
-    const handleDragStart = (attr: string) => {
+    const handleDragStart = (attr: string, e: React.DragEvent) => {
       setDraggingAttr(attr);
+      // carry attribute in dataTransfer for drop handlers
+      try {
+        e.dataTransfer.setData('text/plain', attr);
+        e.dataTransfer.effectAllowed = 'move';
+      } catch {
+        // some browsers may restrict
+      }
     };
     
     const handleTouchStart = (attr: string, e: React.TouchEvent) => {
@@ -810,7 +817,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     const handleAssignAttributeToProduct = (prodCode: string, attr: string) => {
       handleFlashIntensityChange(prodCode, attr, 50);
       if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
-      setSelectedAttrForAssign(null);
+      // keep attr selected for further assignments until user cancels
     };
     
     const handleDrop = (prodCode: string) => {
@@ -882,12 +889,13 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               </div>
             </div>
             
-            <div className={`space-y-2 ${sortingMode === 'grid' ? 'grid grid-cols-2 gap-2' : ''}`}>
+            <div className={`space-y-2 max-h-96 overflow-y-auto overflow-x-auto ${sortingMode === 'grid' ? 'grid grid-cols-2 gap-2' : ''}`}>
               {customAttributes.map((attr, idx) => (
                 <div
                   key={idx}
                   draggable
-                  onDragStart={() => handleDragStart(attr)}
+                  onDragStart={(e) => handleDragStart(attr, e)}
+                  onDragEnd={() => setDraggingAttr(null)}
                   onTouchStart={(e) => handleTouchStart(attr, e)}
                   onTouchMove={handleTouchMove}
                   onTouchEnd={(e) => {
@@ -967,17 +975,40 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   });
                   
                   return (
-                    <div 
-                      key={product.id}
-                      data-product-code={product.code}
-                      className={`p-6 rounded-2xl border-2 transition-all ${
-                        draggingAttr ? 'border-purple-400 bg-purple-50 shadow-md' : 'border-slate-100 hover:border-purple-200'
-                      }`}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => handleDrop(product.code)}
-                      onTouchEnd={(e) => handleTouchEnd(product.code, e)}
-                      onTouchMove={handleTouchMove}
-                    >
+                    <div key={product.id} className="relative">
+                      {draggingAttr && (
+                        <div
+                          className="absolute inset-0 z-20"
+                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const attr = e.dataTransfer.getData('text/plain');
+                            if (attr) {
+                              handleFlashIntensityChange(product.code, attr, 50);
+                              setDraggingAttr(null);
+                            }
+                          }}
+                        />
+                      )}
+                      <div
+                        data-product-code={product.code}
+                        className={`p-6 min-h-48 rounded-2xl border-2 transition-all ${
+                          draggingAttr ? 'border-purple-400 bg-purple-50 shadow-md' : 'border-slate-100 hover:border-purple-200'
+                        }`}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const attr = e.dataTransfer.getData('text/plain');
+                          if (attr) {
+                            handleFlashIntensityChange(product.code, attr, 50);
+                            setDraggingAttr(null);
+                          } else {
+                            handleDrop(product.code);
+                          }
+                        }}
+                        onTouchEnd={(e) => handleTouchEnd(product.code, e)}
+                        onTouchMove={handleTouchMove}
+                      >
                       <div className="flex justify-between items-start mb-6">
                         <div>
                           <div className="flex items-center gap-3 mb-2">

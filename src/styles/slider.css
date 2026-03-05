@@ -25,6 +25,13 @@ input[type="range"] {
   @apply border-purple-500 bg-purple-100 shadow-lg;
 }
 
+/* overlay drop target visual */
+.relative > .absolute.inset-0.z-20 {
+  pointer-events: all;
+  /* subtle highlight to show you can drop */
+  background: rgba(167,139,250,0.15);
+}
+
 /* Feedback visuale durante selezione attributo */
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
