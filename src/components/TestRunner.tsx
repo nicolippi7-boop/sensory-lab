@@ -1123,10 +1123,10 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               </button>
               
               <button 
-                onClick={handleNextProduct}
+                onClick={finalizeTDSAndSubmit}
                 className="px-8 py-4 bg-purple-600 text-white font-black rounded-2xl hover:bg-purple-700 shadow-lg"
               >
-                {currentProductIndex < products.length - 1 ? 'Continua' : 'Completa Test'}
+                Invia Risultati
               </button>
             </div>
           </div>
