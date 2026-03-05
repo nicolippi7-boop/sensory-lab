@@ -893,6 +893,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   onDragStart={() => handleDragStart(attr)}
                   onTouchStart={(e) => handleTouchStart(attr, e)}
                   onTouchMove={handleTouchMove}
+                  onPointerDown={() => setSelectedAttrForAssign(attr)}
                   onTouchEnd={(e) => {
                     // impedisci il click sintetico e termina il drag senza assegnare
                     e.preventDefault();
@@ -1066,6 +1067,11 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                           }`}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => handleDrop(product.code)}
+                          onPointerDown={() => {
+                            if (selectedAttrForAssign) {
+                              handleAssignAttributeToProduct(product.code, selectedAttrForAssign);
+                            }
+                          }}
                           onTouchEnd={(e) => {
                             if (draggingAttr) {
                               handleTouchEnd(product.code, e);
