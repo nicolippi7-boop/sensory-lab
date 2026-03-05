@@ -893,7 +893,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   onDragStart={() => handleDragStart(attr)}
                   onTouchStart={(e) => handleTouchStart(attr, e)}
                   onTouchMove={handleTouchMove}
-                  onPointerDown={() => setSelectedAttrForAssign(attr)}
+                  onPointerDown={(e) => { e.preventDefault(); setSelectedAttrForAssign(attr); }}
                   onTouchEnd={(e) => {
                     // impedisci il click sintetico e termina il drag senza assegnare
                     e.preventDefault();
@@ -990,6 +990,8 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                       onDrop={() => handleDrop(product.code)}
                       onTouchEnd={(e) => handleTouchEnd(product.code, e)}
                       onTouchMove={handleTouchMove}
+                      onPointerDown={(e) => { e.preventDefault(); if (selectedAttrForAssign) handleAssignAttributeToProduct(product.code, selectedAttrForAssign); }}
+                      onClick={() => { if (selectedAttrForAssign) handleAssignAttributeToProduct(product.code, selectedAttrForAssign); }}
                     >
                       <div className="flex justify-between items-start mb-6">
                         <div>
