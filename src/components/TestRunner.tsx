@@ -808,11 +808,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
     };
     
     const handleAssignAttributeToProduct = (prodCode: string, attr: string) => {
-      // imposta intensità ma non deselezionare l'attributo: così
-      // l'utente può assegnarlo a più campioni consecutivi o toccare
-      // un altro attributo in qualsiasi momento.
-      handleFlashIntensityChange(prodCode, attr, 50);
-      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+      const key = `flash_${prodCode}_${attr}`;
+      // Assegna solo se non già assegnato, per evitare di resettare il valore esistente
+      if (!(result.qdaRatings && result.qdaRatings[key] !== undefined)) {
+        handleFlashIntensityChange(prodCode, attr, 50);
+        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+      }
       // non azzeriamo selectedAttrForAssign qui
     };
     
