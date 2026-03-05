@@ -896,7 +896,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   onTouchEnd={(e) => {
                     // impedisci il click sintetico e termina il drag senza assegnare
                     e.preventDefault();
-                    handleTouchEnd('', e);
+                    if (draggingAttr) {
+                      handleTouchEnd('', e);
+                    } else {
+                      // se non dragging, seleziona l'attributo per assegnazione
+                      setSelectedAttrForAssign(attr);
+                    }
                   }}
                   onClick={() => {
                     // seleziona sempre l'attributo corrente (annulla con il pulsante)
@@ -917,6 +922,10 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   <span className="font-bold text-slate-800">{attr}</span>
                   <button 
                     onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveAttribute(attr);
+                    }}
+                    onTouchEnd={(e) => {
                       e.stopPropagation();
                       handleRemoveAttribute(attr);
                     }}
@@ -947,6 +956,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   </div>
                   <button
                     onClick={() => setSelectedAttrForAssign(null)}
+                    onTouchEnd={() => setSelectedAttrForAssign(null)}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700"
                   >
                     Annulla
@@ -1017,6 +1027,7 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                                   <span className="font-bold text-purple-800">{attr}</span>
                                   <button 
                                     onClick={() => handleIntensityChange(product.code, attr, 0)}
+                                    onTouchEnd={() => handleIntensityChange(product.code, attr, 0)}
                                     className="text-slate-400 hover:text-red-500 text-sm px-2 py-1 rounded hover:bg-red-50"
                                   >
                                     Rimuovi
@@ -1055,7 +1066,14 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                           }`}
                           onDragOver={(e) => e.preventDefault()}
                           onDrop={() => handleDrop(product.code)}
-                          onTouchEnd={(e) => handleTouchEnd(product.code, e)}
+                          onTouchEnd={(e) => {
+                            if (draggingAttr) {
+                              handleTouchEnd(product.code, e);
+                            } else if (selectedAttrForAssign) {
+                              e.preventDefault();
+                              handleAssignAttributeToProduct(product.code, selectedAttrForAssign);
+                            }
+                          }}
                           onClick={() => {
                             if (selectedAttrForAssign) {
                               handleAssignAttributeToProduct(product.code, selectedAttrForAssign);
