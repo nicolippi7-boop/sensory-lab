@@ -5,7 +5,7 @@ import { suggestAttributes, analyzeResults } from '../services/geminiService';
 import { 
   Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, Download, 
   Pencil, Trash2, Save, QrCode, X, Copy, Check, Wifi, Layers, Activity, 
-  Target, Anchor, Shuffle, RefreshCw 
+  Target, Anchor, Shuffle, RefreshCw, ArrowUp, ArrowDown, Edit3
 } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { supabase } from './supabaseClient';
@@ -49,6 +49,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [attrScale, setAttrScale] = useState<'linear' | 'likert5' | 'likert7' | 'likert9'>('linear');
   const [attrRefValue, setAttrRefValue] = useState<string>('');
   const [attrRefLabel, setAttrRefLabel] = useState<string>('');
+
+  // STATI PER MODIFICA ATTRIBUTI
+  const [editingAttrId, setEditingAttrId] = useState<string | null>(null);
+  const [editAttrName, setEditAttrName] = useState('');
+  const [editAttrDesc, setEditAttrDesc] = useState('');
+  const [editAttrMin, setEditAttrMin] = useState('');
+  const [editAttrMax, setEditAttrMax] = useState('');
+  const [editAttrScale, setEditAttrScale] = useState<'linear' | 'likert5' | 'likert7' | 'likert9' | 'linear9'>('linear');
+  const [editAttrRefValue, setEditAttrRefValue] = useState<string>('');
+  const [editAttrRefLabel, setEditAttrRefLabel] = useState<string>('');
 
   const [aiLoading, setAiLoading] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -128,6 +138,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setAttrScale('linear'); 
     setAttrRefValue(''); 
     setAttrRefLabel(''); 
+  };
+
+  const handleEditAttribute = (attr: Attribute) => {
+    setEditingAttrId(attr.id);
+    setEditAttrName(attr.name);
+    setEditAttrDesc(attr.description || '');
+    setEditAttrMin(attr.leftAnchor || 'Debole');
+    setEditAttrMax(attr.rightAnchor || 'Forte');
+    setEditAttrScale(attr.scaleType);
+    setEditAttrRefValue(attr.referenceValue?.toString() || '');
+    setEditAttrRefLabel(attr.referenceLabel || '');
+  };
+
+  const handleSaveEditingAttribute = () => {
+    if (!editAttrName.trim()) {
+      alert('Inserisci un nome per l\'attributo.');
+      return;
+    }
+    const updatedAttributes = attributes.map(attr => 
+      attr.id === editingAttrId 
+        ? {
+            ...attr,
+            name: editAttrName.trim(),
+            description: editAttrDesc.trim(),
+            leftAnchor: editAttrMin,
+            rightAnchor: editAttrMax,
+            scaleType: editAttrScale,
+            referenceValue: editAttrRefValue !== '' ? Number(editAttrRefValue) : undefined,
+            referenceLabel: editAttrRefLabel.trim() || undefined
+          }
+        : attr
+    );
+    setAttributes(updatedAttributes);
+    setEditingAttrId(null);
+  };
+
+  const handleCancelEditingAttribute = () => {
+    setEditingAttrId(null);
+  };
+
+  const handleMoveAttributeUp = (index: number) => {
+    if (index === 0) return;
+    const newAttributes = [...attributes];
+    [newAttributes[index - 1], newAttributes[index]] = [newAttributes[index], newAttributes[index - 1]];
+    setAttributes(newAttributes);
+  };
+
+  const handleMoveAttributeDown = (index: number) => {
+    if (index === attributes.length - 1) return;
+    const newAttributes = [...attributes];
+    [newAttributes[index + 1], newAttributes[index]] = [newAttributes[index], newAttributes[index + 1]];
+    setAttributes(newAttributes);
   };
 
   const handleAddAttribute = () => {
@@ -810,14 +872,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                       <button onClick={handleAddAttribute} disabled={!attrName.trim()} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black hover:bg-slate-900 transition-all shadow-xl disabled:opacity-30"> AGGIUNGI ATTRIBUTO </button>
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                      {attributes.map((attr, idx) => (
-                          <div key={attr.id} className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border-2 border-slate-100 shadow-sm">
-                              <div className="text-left">
-                                  <div className="font-black text-slate-800 text-sm">{attr.name}</div>
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{attr.scaleType}</div>
+                  {/* FORM PER EDITING ATTRIBUTO */}
+                  {editingAttrId && (
+                      <div className="bg-amber-50 p-8 rounded-[32px] border-2 border-amber-100 mb-8">
+                          <h4 className="text-lg font-black text-amber-900 mb-6 flex items-center gap-2"><Edit3 size={20} /> Modifica Attributo</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+                              <div className="col-span-2">
+                                  <label className="block text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 ml-1">Nome Attributo</label>
+                                  <input className="w-full p-4 border-2 border-white rounded-2xl font-bold focus:border-amber-500 transition-all" placeholder="es. Dolcezza" value={editAttrName} onChange={e => setEditAttrName(e.target.value)} />
                               </div>
-                              <button onClick={() => setAttributes(attributes.filter((_, i) => i !== idx))} className="text-slate-300 hover:text-red-500 transition-colors"> <X size={20} /> </button>
+                              <div className="col-span-1">
+                                  <label className="block text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 ml-1">Ancora Min</label>
+                                  <input className="w-full p-4 border-2 border-white rounded-2xl font-bold text-xs focus:border-amber-500 transition-all" placeholder="Min" value={editAttrMin} onChange={e => setEditAttrMin(e.target.value)} />
+                              </div>
+                              <div className="col-span-1">
+                                  <label className="block text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 ml-1">Ancora Max</label>
+                                  <input className="w-full p-4 border-2 border-white rounded-2xl font-bold text-xs focus:border-amber-500 transition-all" placeholder="Max" value={editAttrMax} onChange={e => setEditAttrMax(e.target.value)} />
+                              </div>
+                              <div className="col-span-2">
+                                  <label className="block text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 ml-1">Descrizione</label>
+                                  <input className="w-full p-4 border-2 border-white rounded-2xl font-bold focus:border-amber-500 transition-all" placeholder="Descrizione (opzionale)" value={editAttrDesc} onChange={e => setEditAttrDesc(e.target.value)} />
+                              </div>
+                              <div className="col-span-2">
+                                  <label className="block text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 ml-1">Riferimento (Opzionale)</label>
+                                  <div className="flex gap-2">
+                                      <input className="flex-1 p-4 border-2 border-white rounded-2xl font-bold text-sm focus:border-amber-500 transition-all" placeholder="Etichetta" value={editAttrRefLabel} onChange={e => setEditAttrRefLabel(e.target.value)} />
+                                      <input type="number" className="w-24 p-4 border-2 border-white rounded-2xl font-bold text-sm focus:border-amber-500 transition-all" placeholder="Val." value={editAttrRefValue} onChange={e => setEditAttrRefValue(e.target.value)} />
+                                  </div>
+                              </div>
+                              {(newTestType === TestType.QDA || newTestType === TestType.FLASH_PROFILE || newTestType === TestType.RATA || newTestType === TestType.TIME_INTENSITY) && (
+                              <div className="col-span-2">
+                                  <label className="block text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1.5 ml-1">Tipo Scala</label>
+                                  <select className="w-full p-4 border-2 border-white rounded-2xl bg-white font-bold outline-none focus:border-amber-500 transition-all" value={editAttrScale} onChange={e => setEditAttrScale(e.target.value as any)}>
+                                      <option value="linear">Lineare (1-100)</option>
+                                      <option value="linear9">Lineare 1-9 (step 0.1)</option>
+                                      <option value="likert5">Likert 5 pt</option>
+                                      <option value="likert7">Likert 7 pt</option>
+                                      <option value="likert9">9 pt (Edonica)</option>
+                                  </select>
+                              </div>
+                              )}
+                          </div>
+                          <div className="flex gap-3 justify-end">
+                              <button onClick={handleCancelEditingAttribute} className="px-6 py-3 bg-slate-200 text-slate-700 rounded-2xl font-black hover:bg-slate-300 transition-all"> ANNULLA </button>
+                              <button onClick={handleSaveEditingAttribute} disabled={!editAttrName.trim()} className="px-6 py-3 bg-amber-600 text-white rounded-2xl font-black hover:bg-amber-700 transition-all disabled:opacity-30"> SALVA MODIFICA </button>
+                          </div>
+                      </div>
+                  )}
+
+                  {/* LISTA ATTRIBUTI */}
+                  <div className="space-y-2">
+                      {attributes.map((attr, idx) => (
+                          <div key={attr.id} className={`p-4 rounded-2xl border-2 transition-all ${editingAttrId === attr.id ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100 hover:border-indigo-200'}`}>
+                              <div className="flex items-center justify-between gap-3">
+                                  <div className="flex-1">
+                                      <div className="font-black text-slate-800 text-sm">{attr.name}</div>
+                                      {attr.description && <div className="text-xs text-slate-500 mt-1">{attr.description}</div>}
+                                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">{attr.scaleType} • {attr.leftAnchor} ↔ {attr.rightAnchor}</div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                      <button 
+                                          onClick={() => handleMoveAttributeUp(idx)} 
+                                          disabled={idx === 0}
+                                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed" 
+                                          title="Sposta su"
+                                      > 
+                                          <ArrowUp size={18} /> 
+                                      </button>
+                                      <button 
+                                          onClick={() => handleMoveAttributeDown(idx)} 
+                                          disabled={idx === attributes.length - 1}
+                                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed" 
+                                          title="Sposta giù"
+                                      > 
+                                          <ArrowDown size={18} /> 
+                                      </button>
+                                      <button 
+                                          onClick={() => handleEditAttribute(attr)} 
+                                          className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-colors" 
+                                          title="Modifica"
+                                      > 
+                                          <Edit3 size={18} /> 
+                                      </button>
+                                      <button 
+                                          onClick={() => setAttributes(attributes.filter((_, i) => i !== idx))} 
+                                          className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors" 
+                                          title="Elimina"
+                                      > 
+                                          <X size={18} /> 
+                                      </button>
+                                  </div>
+                              </div>
                           </div>
                       ))}
                   </div>
