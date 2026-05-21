@@ -44,7 +44,7 @@ const ThumbOnlyRange: React.FC<ThumbOnlyRangeProps> = ({ value, onChange, classN
     const thumbCenterX = rect.left + ((currentValue - min) / range) * rect.width;
     const distance = Math.abs(e.clientX - thumbCenterX);
 
-    const thumbRadius = 18;
+    const thumbRadius = 28;
     if (distance <= thumbRadius) {
       activeRef.current = true;
     } else {
