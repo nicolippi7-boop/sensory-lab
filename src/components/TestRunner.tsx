@@ -22,6 +22,93 @@ const shuffleArray = <T,>(array: T[]): T[] => {
     return newArr;
 };
 
+interface SafeRangeSliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'type' | 'value'> {
+  value: number;
+  onValueChange: (value: number) => void;
+  activationLabel?: string;
+  activationOptional?: boolean;
+}
+
+const SafeRangeSlider: React.FC<SafeRangeSliderProps> = ({
+  value,
+  onValueChange,
+  activationLabel = 'Tocca per attivare',
+  activationOptional = false,
+  disabled = false,
+  className = '',
+  ...props
+}) => {
+  const [activated, setActivated] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const shouldBlock = !activated && !activationOptional;
+
+  const handleActivate = () => {
+    if (disabled) return;
+    setActivated(true);
+    inputRef.current?.focus();
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (shouldBlock) return;
+    onValueChange(Number(e.target.value));
+  };
+
+  const handlePointerDown = () => {
+    if (!disabled) setActivated(true);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLInputElement>) => {
+    if (disabled || e.touches.length !== 1) return;
+    setActivated(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLInputElement>) => {
+    if (activated) {
+      e.stopPropagation();
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
+    if (shouldBlock) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  const handleBlur = () => {
+    setActivated(false);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="range"
+        value={value}
+        onChange={handleChange}
+        onPointerDown={handlePointerDown}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onWheel={handleWheel}
+        onBlur={handleBlur}
+        disabled={disabled}
+        className={`${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        {...props}
+      />
+      {!disabled && !activated && !activationOptional && (
+        <button
+          type="button"
+          onClick={handleActivate}
+          className="absolute inset-0 w-full h-full flex items-center justify-center text-xs font-semibold text-slate-600 bg-white/80 border border-slate-200 rounded-lg backdrop-blur transition hover:bg-white"
+        >
+          {activationLabel}
+        </button>
+      )}
+    </div>
+  );
+};
+
 export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onComplete, onExit }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
@@ -1039,12 +1126,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                                 </div>
                                 
                                 <div className="flex items-center gap-4">
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
+                                  <SafeRangeSlider
+                                    min={0}
+                                    max={100}
                                     value={value}
-                                    onChange={(e) => handleIntensityChange(product.code, attr, parseInt(e.target.value))}
+                                    onValueChange={(next) => handleIntensityChange(product.code, attr, next)}
+                                    activationLabel="Tocca per attivare"
                                     className="flex-1 h-3 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                                   />
                                   <div className="w-16 text-center">
@@ -1328,14 +1415,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
               <div className="text-3xl font-black text-blue-600">{currentIntensity}</div>
             </div>
             
-            <input
-              type="range"
-              min="0"
-              max="100"
+            <SafeRangeSlider
+              min={0}
+              max={100}
               value={currentIntensity}
-              onChange={(e) => setCurrentIntensity(parseInt(e.target.value))}
-              className="w-full h-4 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              onValueChange={(next) => setCurrentIntensity(next)}
+              activationLabel="Tocca per attivare"
               disabled={!isTimerRunning}
+              className="w-full h-4 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              activationOptional={true}
             />
             
             <div className="flex justify-between text-sm text-slate-500 mt-2">
@@ -1520,12 +1608,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                   {isSelected && (
                     <div className="space-y-4">
                       <div className="flex items-center gap-4">
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
+                        <SafeRangeSlider
+                          min={0}
+                          max={100}
                           value={intensity}
-                          onChange={(e) => handleRataChange(attr.id, parseInt(e.target.value))}
+                          onValueChange={(next) => handleRataChange(attr.id, next)}
+                          activationLabel="Tocca per attivare"
                           className="flex-1 h-3 bg-rose-200 rounded-lg appearance-none cursor-pointer accent-rose-600"
                         />
                         <div className="w-16 text-center">
@@ -2059,7 +2147,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                             <div className="w-1 h-10 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.4)]" />
                         </div>
                     )}
-                    <input type="range" min="1" max="9" step="0.1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
+                    <SafeRangeSlider
+                      min={1}
+                      max={9}
+                      step={0.1}
+                      value={val}
+                      onValueChange={(next) => handleQdaChange(attr.id, next)}
+                      activationLabel="Tocca per attivare"
+                      className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10"
+                    />
                 </div>
                 <div className="flex justify-between px-2">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.leftAnchor || 'Debole'}</span>
@@ -2105,7 +2201,15 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
                         <div className="w-1 h-10 bg-red-500 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.4)]" />
                     </div>
                 )}
-                <input type="range" min="0" max="100" step="1" value={val} onChange={(e) => handleQdaChange(attr.id, parseFloat(e.target.value))} className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10" />
+                <SafeRangeSlider
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={val}
+                  onValueChange={(next) => handleQdaChange(attr.id, next)}
+                  activationLabel="Tocca per attivare"
+                  className="relative w-full h-4 bg-slate-100 rounded-full appearance-none cursor-pointer accent-indigo-600 shadow-inner z-10"
+                />
             </div>
             <div className="flex justify-between px-2">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{attr.leftAnchor || 'Debole'}</span>
@@ -2230,12 +2334,12 @@ export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onCompl
             <div className="space-y-3">
               <label className="block text-sm font-semibold text-slate-700">Intensità del Sentore *</label>
               <div className="flex items-center gap-6">
-                <input
-                  type="range"
-                  min="1"
-                  max="4"
+                <SafeRangeSlider
+                  min={1}
+                  max={4}
                   value={triangleResponse.intensity}
-                  onChange={e => setTriangleResponse(prev => ({ ...prev, intensity: parseInt(e.target.value) }))}
+                  onValueChange={(next) => setTriangleResponse(prev => ({ ...prev, intensity: next }))}
+                  activationLabel="Tocca per attivare"
                   className="flex-1 h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                 />
                 <div className="text-center">
