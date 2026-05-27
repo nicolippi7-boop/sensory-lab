@@ -1,12 +1,17 @@
-import { createClient } from '@supabase/supabase-js';
+/**
+ * ============================================================================
+ * DEPRECATED - Use authService instead
+ * ============================================================================
+ * 
+ * This file is kept for backward compatibility.
+ * All Supabase operations should use the isolated data service:
+ * 
+ * Import from: src/services/authService.ts
+ * Use: authenticateUser(), fetchUserTests(), etc.
+ * 
+ * This ensures all queries include user context and enforce data isolation.
+ */
 
-// In Vite si usa import.meta.env e non process.env
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+import { supabase } from '../services/authService';
 
-// Protezione: se le chiavi mancano, il client non viene inizializzato male
-if (!supabaseUrl || !supabaseKey) {
-  console.warn("Attenzione: Chiavi Supabase mancanti! Controlla le Environment Variables su Vercel.");
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export { supabase };
