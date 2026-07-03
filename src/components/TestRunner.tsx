@@ -7,6 +7,7 @@ import { supabase } from './supabaseClient';
 interface TestRunnerProps {
   test: SensoryTest;
   judgeName: string;
+  userId: string | null;
   onComplete: (result: JudgeResult) => void;
   onExit: () => void;
 }
@@ -86,7 +87,7 @@ const ThumbOnlyRange: React.FC<ThumbOnlyRangeProps> = ({ value, onChange, classN
   );
 };
 
-export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, onComplete, onExit }) => {
+export const TestRunner: React.FC<TestRunnerProps> = ({ test, judgeName, userId, onComplete, onExit }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentProductIndex, setCurrentProductIndex] = useState(0);
   

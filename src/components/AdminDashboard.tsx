@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { TestType } from '../types';
 import type { SensoryTest, Product, Attribute, TestConfig, JudgeResult } from '../types';
+import { useUserId } from '../contexts/SessionContext';
+import { deleteTestResults } from '../services/isolatedDataService';
 import { suggestAttributes, analyzeResults } from '../services/geminiService';
 import { 
   Plus, BarChart2, Wand2, Loader2, ArrowLeft, StopCircle, Download, 
@@ -8,7 +10,6 @@ import {
   Target, Anchor, Shuffle, RefreshCw, ArrowUp, ArrowDown, Edit3
 } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { supabase } from './supabaseClient';
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
@@ -26,6 +27,7 @@ const generateId = () => Date.now().toString(36) + Math.random().toString(36).su
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
   tests, results, onCreateTest, onUpdateTest, onDeleteTest, onNavigate, peerId 
 }) => {
+  const userId = useUserId();
   const [view, setView] = useState<'LIST' | 'CREATE' | 'DETAIL'>('LIST');
   const [selectedTest, setSelectedTest] = useState<SensoryTest | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -265,12 +267,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     
     if(window.confirm(`⚠️ SEI SICURO? Vuoi cancellare tutte le ${count} risposte per "${test.name}"? Il test rimarrà configurato, ma perderai tutti i dati degli assaggiatori.`)) {
       try {
-        const { error } = await supabase
-          .from('results')
-          .delete()
-          .eq('test_id', test.id);
-        
-        if (error) throw error;
+        // Use isolated service to delete results (ensures user owns the test)
+        if (userId) {
+          await deleteTestResults(test.id, userId);
+        }
         
         alert("✅ Risultati azzerati con successo.");
         onUpdateTest({...test});

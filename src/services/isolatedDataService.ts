@@ -399,3 +399,33 @@ export const fetchUserSubmittedResults = async (userId: string | null): Promise<
     throw error;
   }
 };
+
+/**
+ * Delete all results for a specific test (only if owned by user)
+ * CRITICAL DATA ISOLATION:
+ * - Only test owner can delete results from their tests
+ * - Verifies test ownership before deletion
+ */
+export const deleteTestResults = async (testId: string, userId: string | null): Promise<void> => {
+  validateUserId(userId);
+
+  try {
+    // CRITICAL: Verify user owns the test before deleting its results
+    const test = await fetchUserTest(testId, userId);
+    if (!test) {
+      throw new Error('Test not found or access denied');
+    }
+
+    // Delete all results for this test that belongs to user
+    const { error } = await supabase
+      .from(RESULTS_TABLE)
+      .delete()
+      .eq('testId', testId)
+      .eq('testUserId', userId!);  // CRITICAL: Only delete results from user's tests
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting test results:', error);
+    throw error;
+  }
+};

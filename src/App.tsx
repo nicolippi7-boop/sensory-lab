@@ -1,14 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { SensoryTest, JudgeResult, ViewState } from './types';
+import { SessionProvider, useUserId, useSession } from './contexts/SessionContext';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TestRunner } from './components/TestRunner';
+import { AuthPage } from './components/AuthPage';
 import { ChefHat, RefreshCw } from 'lucide-react';
 import './styles/slider.css';
 // @ts-ignore
 import { Peer } from 'peerjs';
-import { supabase } from './components/supabaseClient';
+import {
+  fetchUserTests,
+  createUserTest,
+  updateUserTest,
+  deleteUserTest,
+  fetchTestResults,
+  submitTestResult
+} from './services/isolatedDataService';
 
 const App: React.FC = () => {
+  return (
+    <SessionProvider>
+      <AppContent />
+    </SessionProvider>
+  );
+};
+
+const AppContent: React.FC = () => {
+  const userId = useUserId();
+  const { isAuthenticated } = useSession();
   // --- LOGICA DI RECUPERO DAL LOCAL STORAGE ---
   const [view, setView] = useState<ViewState>(() => {
     // 1. Controlliamo se c'è una sessione salvata
@@ -28,8 +47,19 @@ const App: React.FC = () => {
   const [results, setResults] = useState<JudgeResult[]>([]);
   const [peerId, setPeerId] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   const peerRef = useRef<any>(null);
+
+  // Check authentication
+  if (!isAuthenticated()) {
+    return <AuthPage onAuthSuccess={() => {}} />;
+  }
+
+  // Ensure userId exists
+  if (!userId) {
+    return <div className="min-h-screen flex items-center justify-center text-slate-600">Caricamento sessione...</div>;
+  }
 
   // --- LOGICA DI SALVATAGGIO AUTOMATICO ---
   useEffect(() => {
@@ -44,22 +74,27 @@ const App: React.FC = () => {
   const fetchAllData = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
-      const { data: testsData } = await supabase.from('tests').select('*').order('created_at', { ascending: false });
-      if (testsData) setTests(testsData);
+      // Fetch user's tests using isolated service
+      const testsData = await fetchUserTests(userId);
+      setTests(testsData);
 
-      const { data: resultsData } = await supabase.from('results').select('*').order('submitted_at', { ascending: false });
-      if (resultsData) {
-        const formattedResults = resultsData.map(r => ({
-          ...(r.responses as any),
-          id: r.id,
-          testId: r.test_id,
-          judgeName: r.judge_name,
-          submittedAt: r.submitted_at
-        }));
-        setResults(formattedResults);
+      // Fetch results for all user's tests
+      const allResults: JudgeResult[] = [];
+      for (const test of testsData) {
+        try {
+          const testResults = await fetchTestResults(test.id, userId);
+          allResults.push(...testResults);
+        } catch (err) {
+          console.error(`Errore fetch risultati test ${test.id}:`, err);
+        }
       }
-    } catch (err) { console.error("Errore fetch:", err); } 
-    finally { setIsRefreshing(false); }
+      setResults(allResults);
+    } catch (err) { 
+      console.error("Errore fetch:", err); 
+    } 
+    finally { 
+      setIsRefreshing(false); 
+    }
   };
 
   useEffect(() => {
@@ -79,25 +114,68 @@ const App: React.FC = () => {
 
   const handleCreateTest = async (test: SensoryTest) => {
     try {
-      await supabase.from('tests').insert([{ id: String(test.id), name: test.name, type: test.type, status: test.status, config: test.config }]);
+      setLoading(true);
+      // Create test using isolated service with userId
+      const newTest: Omit<SensoryTest, 'userId' | 'createdAt'> = {
+        id: test.id,
+        name: test.name,
+        type: test.type,
+        status: test.status,
+        config: test.config
+      };
+      await createUserTest(newTest, userId);
       await fetchAllData();
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error(err);
+      alert(`Errore creazione test: ${(err as any).message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleComplete = async (res: JudgeResult) => {
     const isJudgeMode = new URLSearchParams(window.location.search).get('mode') === 'judge';
     try {
-      await supabase.from('results').insert([{ test_id: String(res.testId), judge_name: String(res.judgeName), submitted_at: new Date().toISOString(), responses: res }]);
+      setLoading(true);
+      // Submit result using isolated service
+      const resultToSubmit: Omit<JudgeResult, 'id' | 'userId'> = {
+        testId: res.testId,
+        testUserId: '', // Will be set by submitTestResult
+        judgeName: res.judgeName,
+        submittedAt: new Date().toISOString(),
+        triangleSelection: res.triangleSelection,
+        triangleResponse: res.triangleResponse,
+        pairedSelection: res.pairedSelection,
+        qdaRatings: res.qdaRatings,
+        flashAttributes: res.flashAttributes,
+        cataSelection: res.cataSelection,
+        rataSelection: res.rataSelection,
+        nappingData: res.nappingData,
+        sortingGroups: res.sortingGroups,
+        tdsLogs: res.tdsLogs,
+        tdsStartTime: res.tdsStartTime,
+        tdsEndTime: res.tdsEndTime,
+        tiLogs: res.tiLogs,
+        generalNotes: res.generalNotes,
+        productNotes: res.productNotes
+      };
+      
+      await submitTestResult(resultToSubmit, userId);
       await fetchAllData();
       
       // --- PULIZIA LOCAL STORAGE A FINE TEST ---
-      localStorage.clear(); 
+      localStorage.removeItem(`sensoryTest_${res.testId}_${res.judgeName}`);
       
       setView(isJudgeMode ? 'JUDGE_LOGIN' : 'HOME');
       setJudgeName(''); 
       setActiveTestId('');
       alert("✅ Test inviato!");
-    } catch (err: any) { alert(`Errore: ${err.message}`); }
+    } catch (err: any) { 
+      console.error(err);
+      alert(`Errore: ${err.message}`); 
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -144,9 +222,11 @@ const App: React.FC = () => {
       {view === 'JUDGE_RUNNER' && activeTestId && tests.length > 0 && (
         <TestRunner 
           test={tests.find(t => t.id === activeTestId)!}
-          judgeName={judgeName} onComplete={handleComplete}
+          judgeName={judgeName} 
+          userId={userId}
+          onComplete={handleComplete}
           onExit={() => {
-            localStorage.clear(); // Puliamo se esce volontariamente
+            localStorage.removeItem(`sensoryTest_${activeTestId}_${judgeName}`);
             setView(new URLSearchParams(window.location.search).get('mode') === 'judge' ? 'JUDGE_LOGIN' : 'HOME');
           }}
         />
@@ -154,13 +234,41 @@ const App: React.FC = () => {
 
       {view === 'ADMIN_DASHBOARD' && (
         <AdminDashboard 
-          tests={tests} results={results} onCreateTest={handleCreateTest}
-          onUpdateTest={async (updated) => { 
-            await supabase.from('tests').update({ status: updated.status, config: updated.config, name: updated.name }).eq('id', updated.id);
-            fetchAllData(); 
+          tests={tests} 
+          results={results} 
+          onCreateTest={handleCreateTest}
+          onUpdateTest={async (updated) => {
+            try {
+              setLoading(true);
+              const updates: Partial<Omit<SensoryTest, 'id' | 'userId' | 'createdAt'>> = {
+                name: updated.name,
+                status: updated.status,
+                config: updated.config,
+                type: updated.type
+              };
+              await updateUserTest(updated.id, updates, userId);
+              await fetchAllData();
+            } catch (err) {
+              console.error(err);
+              alert(`Errore aggiornamento test: ${(err as any).message}`);
+            } finally {
+              setLoading(false);
+            }
           }}
-          onDeleteTest={async (id) => { await supabase.from('tests').delete().eq('id', id); fetchAllData(); }}
-          onNavigate={() => setView('HOME')} peerId={peerId}
+          onDeleteTest={async (id) => {
+            try {
+              setLoading(true);
+              await deleteUserTest(id, userId);
+              await fetchAllData();
+            } catch (err) {
+              console.error(err);
+              alert(`Errore eliminazione test: ${(err as any).message}`);
+            } finally {
+              setLoading(false);
+            }
+          }}
+          onNavigate={() => setView('HOME')} 
+          peerId={peerId}
         />
       )}
     </div>
